@@ -1,0 +1,453 @@
+package agent
+
+import (
+	"bufio"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"maps"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/kpenfound/busybees/core/agent/agentbin"
+	"github.com/kpenfound/busybees/core/agent/procs"
+)
+
+// A container session runs the backend command unchanged inside the engine.
+// The work directory, session directory, optional shared git metadata,
+// caller mounts and skill cache use host paths so references in prompts
+// also resolve in the container.
+// The container runs as the host user with a private tmpfs home. Environment
+// values reach the engine by name, never on its command line.
+//
+// When HostMCP is supplied, its server runs in a separate host process group
+// and the container receives an HTTP entry with a per-session bearer token.
+// The engine writes a container id, and the runner records the host server PID
+// beside it so orphan cleanup can remove both after a crash.
+
+// containerHostAlias is the name the container reaches the host by. Docker
+// Desktop resolves it on its own; on Linux the container is started with
+// --add-host so it does.
+const containerHostAlias = "host.docker.internal"
+
+// hostOS, hostUID and hostGID describe the machine to the container code,
+// as variables so a test can describe one it is not running on.
+var (
+	hostOS  = runtime.GOOS
+	hostUID = os.Getuid
+	hostGID = os.Getgid
+)
+
+// serverStart is how long the caller-supplied server has to report its address.
+const serverStart = 15 * time.Second
+
+// container is one session's box: the engine command that runs it, the
+// caller-supplied server on the host it talks to, and what it is given.
+type container struct {
+	r          *Runner
+	req        Request
+	sessionDir string
+	// name is the container's name (<name prefix><session name>-<random>).
+	name string
+	// image is what the container runs: the role's sandbox_image, or the
+	// image built from its container_use_environment.
+	image string
+	// server is the caller-supplied MCP server on the host, and builtin the entry
+	// the session reaches it through.
+	server  *exec.Cmd
+	builtin MCPEntry
+	// vars is the session's environment inside the container.
+	vars []envVar
+}
+
+// startContainer prepares a container session: it settles the image
+// (building it from the role's container_use_environment when that is set,
+// before anything else starts, so a failed build leaves nothing to stop),
+// starts the caller-supplied server on the host and builds the session's
+// environment. Run has already asked Profile.Validate what the
+// box needs. The container itself is started by Run, through command;
+// close stops the server.
+func (r *Runner) startContainer(ctx context.Context, req Request, sessionDir string) (*container, error) {
+	c := &container{r: r, req: req, sessionDir: sessionDir, name: r.namePrefix() + sanitize(req.Name) + "-" + randomHex(4), image: req.Profile.SandboxImage}
+	if req.Profile.ContainerUseEnvironment != "" {
+		image, err := r.containerUseImage(ctx, req, sessionDir)
+		if err != nil {
+			return nil, err
+		}
+		c.image = image
+	}
+	c.vars = r.containerVars(req, sessionDir)
+	if req.HostMCP != nil {
+		if err := c.startServer(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
+}
+
+// startServer runs the caller HTTP server on the host with the
+// environment a session on the host would have started it with, reads the
+// address it reports, and builds the entry the session reaches it by: the
+// host's alias, the port, and a token this session alone holds.
+func (c *container) startServer(ctx context.Context) error {
+	r := c.r
+	addr, err := r.containerListen(ctx)
+	if err != nil {
+		return err
+	}
+	token := randomHex(32)
+	h := c.req.HostMCP
+	args := append(slices.Clone(h.Entry.Args), h.ListenArgs...)
+	args = append(args, addr)
+	cmd := agentbin.CommandContext(context.Background(), h.Entry.Command, args...)
+	cmd.Dir = c.req.WorkDir
+	serverReq := c.req
+	if h.Env != nil {
+		serverReq.Env = h.Env
+	}
+	cmd.Env = r.env(serverReq, c.sessionDir)
+	for _, key := range slices.Sorted(maps.Keys(h.Entry.Env)) {
+		cmd.Env = append(cmd.Env, key+"="+h.Entry.Env[key])
+	}
+	cmd.Env = append(cmd.Env, h.TokenEnv+"="+token)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	stderr, err := os.Create(filepath.Join(c.sessionDir, "mcp-server.log"))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stderr.Close() }()
+	cmd.Stderr = stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start the built-in MCP server: %w", err)
+	}
+	c.server = cmd
+	// The server is in a process group of its own, outside the session's
+	// and outside this process's, so nothing finds it once this process is
+	// gone. Recording its pid is what lets orphan cleanup reap it after a
+	// crash; close removes the file again.
+	if err := procs.WriteServerPID(c.sessionDir, cmd.Process.Pid); err != nil {
+		c.close()
+		return fmt.Errorf("record the built-in MCP server's pid: %w", err)
+	}
+	line := make(chan string, 1)
+	go func() {
+		sc := bufio.NewScanner(stdout)
+		if sc.Scan() {
+			line <- sc.Text()
+		}
+		close(line)
+	}()
+	var listening string
+	select {
+	case listening = <-line:
+	case <-time.After(serverStart):
+	case <-ctx.Done():
+	}
+	reported, ok := strings.CutPrefix(listening, h.ListeningPrefix)
+	if !ok {
+		c.close()
+		return fmt.Errorf("the built-in MCP server did not report its address (got %q); see %s", listening, filepath.Join(c.sessionDir, "mcp-server.log"))
+	}
+	_, port, err := net.SplitHostPort(reported)
+	if err != nil {
+		c.close()
+		return fmt.Errorf("the built-in MCP server reported %q: %w", reported, err)
+	}
+	c.vars = append(c.vars, envVar{h.TokenEnv, token})
+	c.builtin = MCPEntry{
+		Type:           "http",
+		URL:            "http://" + net.JoinHostPort(containerHostAlias, port) + h.Path,
+		BearerTokenEnv: h.TokenEnv,
+	}
+	return nil
+}
+
+// containerListen is the address the caller-supplied server listens on for a
+// container session: ContainerListen when set, else the loopback on macOS,
+// which Docker Desktop's host alias reaches, and the bridge gateway on
+// Linux, which is the address the host alias resolves to there and the one
+// address of the host a container can reach — the loopback is the
+// container's own. Nothing else is supported.
+func (r *Runner) containerListen(ctx context.Context) (string, error) {
+	if r.ContainerListen != "" {
+		return r.ContainerListen, nil
+	}
+	switch hostOS {
+	case "darwin":
+		return "127.0.0.1:0", nil
+	case "linux":
+		out, err := agentbin.CommandContext(ctx, r.dockerBin(), "network", "inspect", "bridge", "--format", "{{(index .IPAM.Config 0).Gateway}}").Output()
+		if err != nil {
+			return "", fmt.Errorf("find the address the container reaches the host by (%s network inspect bridge): %w", ContainerEngine, err)
+		}
+		gw := strings.TrimSpace(string(out))
+		if net.ParseIP(gw) == nil {
+			return "", fmt.Errorf("%s network inspect bridge reported %q, not an address", ContainerEngine, gw)
+		}
+		return net.JoinHostPort(gw, "0"), nil
+	default:
+		return "", fmt.Errorf("sandbox %q runs on macOS and Linux only, not %s", SandboxContainer, hostOS)
+	}
+}
+
+// containerVars is the session's environment inside the container, built
+// from nothing: only backend credentials and caller-supplied context are
+// forwarded. HOME is the private tmpfs the container is given.
+func (r *Runner) containerVars(req Request, sessionDir string) []envVar {
+	var vars []envVar
+	agent := req.Profile.Agent
+	if agent == "" {
+		agent = AgentClaude
+	}
+	// The agent's own credential, forwarded from the host when it is
+	// there: inside there is no keychain to hold one. Set before the
+	// role's env so a role can name a different one.
+	for _, name := range AgentCredentials[agent] {
+		if v := os.Getenv(name); v != "" {
+			vars = append(vars, envVar{name, v})
+		}
+	}
+	vars = append(vars, r.sessionVars(req, sessionDir)...)
+	for _, k := range slices.Sorted(maps.Keys(req.ContainerEnv)) {
+		vars = append(vars, envVar{k, req.ContainerEnv[k]})
+	}
+	vars = append(vars, envVar{"HOME", r.containerHome()})
+	return vars
+}
+
+// command wraps the backend's command line in the engine's: the container
+// is created removed-on-exit, named, labelled and recorded, given its
+// mounts and its environment, and runs bin with args in the worktree.
+// Values are passed to the engine by variable name, read from the engine
+// client's own environment (clientEnv), so no secret appears on a command
+// line another user of the machine can list.
+func (c *container) command(ctx context.Context, bin string, args []string) (string, []string, error) {
+	r, req := c.r, c.req
+	out := []string{
+		"run", "--rm", "--interactive",
+		"--name", c.name,
+		"--cidfile", filepath.Join(c.sessionDir, procs.ContainerIDFile),
+		"--label", r.containerLabel() + "=" + c.sessionDir,
+		"--workdir", req.WorkDir,
+		"--mount", "type=tmpfs,destination=" + r.containerHome() + ",tmpfs-mode=1777",
+	}
+	mounts, err := c.mounts(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	out = append(out, mounts...)
+	// The session runs as the host's user, not the image's: claude refuses
+	// --dangerously-skip-permissions as root, and on Linux what the session
+	// writes into the mounts must be the host user's or the host cannot
+	// remove the worktree afterwards (Docker Desktop maps ownership on
+	// macOS, where any user would do). The user has no passwd entry in the
+	// image, which is why HOME is set explicitly.
+	out = append(out, "--user", strconv.Itoa(hostUID())+":"+strconv.Itoa(hostGID()))
+	if hostOS == "linux" {
+		// The host alias is Docker Desktop's; Linux is told to resolve it
+		// to the bridge gateway.
+		out = append(out, "--add-host", containerHostAlias+":host-gateway")
+	}
+	for _, v := range dedupe(c.vars) {
+		if v.name == "HOME" {
+			// The engine client needs its own HOME to find its
+			// configuration, so this one is not read from its environment.
+			out = append(out, "--env", v.name+"="+v.value)
+			continue
+		}
+		out = append(out, "--env", v.name)
+	}
+	out = append(out, c.image, bin)
+	out = append(out, args...)
+	return r.dockerBin(), out, nil
+}
+
+// mounts are the bind mounts the container gets, each at its host path.
+// A path that goes through a symbolic link is mounted at its real path as
+// well: git records real paths in a linked worktree's pointers (on macOS
+// the temp directory the worktrees live under is one, /var -> /private/var),
+// while the prompts and the environment name the path as the caller knows it,
+// and both must resolve inside.
+func (c *container) mounts(ctx context.Context) ([]string, error) {
+	r, req := c.r, c.req
+	destinations := map[string]bool{}
+	bind := func(path string, ro bool) []string {
+		var out []string
+		dests := []string{path}
+		if real, err := filepath.EvalSymlinks(path); err == nil && real != path {
+			dests = append(dests, real)
+		}
+		for _, dst := range dests {
+			if destinations[dst] {
+				continue
+			}
+			destinations[dst] = true
+			spec := "type=bind,source=" + path + ",destination=" + dst
+			if ro {
+				spec += ",readonly"
+			}
+			out = append(out, "--mount", spec)
+		}
+		return out
+	}
+	var out []string
+	out = append(out, bind(req.WorkDir, false)...)
+	if gitDir, err := commonGitDir(ctx, req.WorkDir); req.Profile.VCSAccess && err == nil && !within(gitDir, req.WorkDir) {
+		out = append(out, bind(gitDir, false)...)
+	}
+	for _, dir := range r.MountDirs {
+		out = append(out, bind(dir, false)...)
+	}
+	// Generated prompts and configuration must be reachable even when the
+	// caller keeps session artifacts outside the work directory.
+	covered := func(path string) bool {
+		for dir := range destinations {
+			// Compare actual container paths: mounting a target does not
+			// expose an alias, nor does mounting an alias's parent expose
+			// a target outside that parent.
+			rel, err := filepath.Rel(dir, path)
+			if err == nil && rel != ".." && !strings.HasPrefix(rel, "../") {
+				return true
+			}
+		}
+		return false
+	}
+	real, _ := filepath.EvalSymlinks(c.sessionDir)
+	if c.sessionDir != "" && (!covered(c.sessionDir) || (real != "" && !covered(real))) {
+		out = append(out, bind(c.sessionDir, false)...)
+	}
+	if r.Skills != nil && len(req.Profile.Skills) > 0 {
+		for _, dir := range r.SkillMountDirs {
+			out = append(out, bind(dir, true)...)
+		}
+	}
+	return out, nil
+}
+
+// commonGitDir is the repository directory a worktree's git operations
+// write to: the repository's own .git for a linked worktree, which is
+// outside the worktree and must be mounted with it. Git reports it as a
+// real path, which is also how the worktree's .git file names it.
+func commonGitDir(ctx context.Context, workDir string) (string, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", workDir, "rev-parse", "--path-format=absolute", "--git-common-dir").Output()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(strings.TrimSpace(string(out))), nil
+}
+
+// within reports whether path is dir or inside it, either as given or as
+// a real path.
+func within(path, dir string) bool {
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, "../")
+}
+
+// clientEnv is the environment the engine client runs with: the host's,
+// with the session's variables laid over it so the engine reads their
+// values by name. Each name appears once, holding the value set last: the
+// engine reads a name's first occurrence, and a role's env must not win
+// over the caller's own variables here when it does not on the host. HOME is the
+// exception (see command).
+func (c *container) clientEnv() []string {
+	vars := dedupe(c.vars)
+	names := map[string]bool{}
+	for _, v := range vars {
+		if v.name == "HOME" {
+			continue // the container's HOME is on the command line; the client keeps its own
+		}
+		names[v.name] = true
+	}
+	var env []string
+	for _, kv := range hostEnv(c.r.EnvironmentPrefix) {
+		name, _, _ := strings.Cut(kv, "=")
+		if !names[name] {
+			env = append(env, kv)
+		}
+	}
+	for _, v := range vars {
+		if v.name != "HOME" {
+			env = append(env, v.name+"="+v.value)
+		}
+	}
+	return env
+}
+
+// dedupe keeps one entry per name, in the order names first appear, with
+// the value that was set last: the order sessionVars sets them in is the
+// precedence order, later wins.
+func dedupe(vars []envVar) []envVar {
+	var out []envVar
+	index := map[string]int{}
+	for _, v := range vars {
+		if i, ok := index[v.name]; ok {
+			out[i].value = v.value
+			continue
+		}
+		index[v.name] = len(out)
+		out = append(out, v)
+	}
+	return out
+}
+
+// remove stops and removes the container, for a session that is being
+// stopped: killing the engine client alone leaves the container running.
+func (c *container) remove() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_ = agentbin.CommandContext(ctx, c.r.dockerBin(), "rm", "--force", c.name).Run()
+}
+
+// close stops the caller-supplied server and forgets the container id and the
+// server's pid: the container is gone (--rm) or removed, and the server has
+// been killed, so neither record has anything left to point at.
+func (c *container) close() {
+	if c.server != nil && c.server.Process != nil {
+		_ = syscall.Kill(-c.server.Process.Pid, syscall.SIGKILL)
+		_ = c.server.Wait()
+		c.server = nil
+	}
+	procs.RemoveServerPID(c.sessionDir)
+	procs.RemoveContainerID(c.sessionDir)
+}
+
+func (r *Runner) dockerBin() string {
+	if r.DockerBin != "" {
+		return r.DockerBin
+	}
+	return ContainerEngine
+}
+
+func (r *Runner) containerHome() string {
+	if r.ContainerHome != "" {
+		return r.ContainerHome
+	}
+	return "/home/agent"
+}
+
+func randomHex(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b)
+}
