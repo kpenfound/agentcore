@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
-	"github.com/kpenfound/busybees/core/agent/agenttest"
-	"github.com/kpenfound/busybees/core/agent/procs"
-	"github.com/kpenfound/busybees/core/vcs"
+	"github.com/kpenfound/agentcore/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/procs"
+	"github.com/kpenfound/agentcore/vcs"
 )
 
 // These tests use Runner directly: no caller fixture supplies a namespace,

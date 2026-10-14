@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/vcs"
-	"github.com/kpenfound/busybees/core/vcs/internal/vcstest"
+	"github.com/kpenfound/agentcore/vcs"
+	"github.com/kpenfound/agentcore/vcs/internal/vcstest"
 )
 
 // newStack is vcstest's repository with jj colocated in it: the branches
@@ -22,8 +22,8 @@ func newStack(t *testing.T, conflict bool) *vcstest.Stack {
 		// The test runtime dagger check runs in has jj and says so: there
 		// a missing jj fails rather than skips. Reading the variable also
 		// keeps go's test cache from replaying a skip recorded without it.
-		if os.Getenv("BUSYBEES_REQUIRE_JJ") != "" {
-			t.Fatalf("BUSYBEES_REQUIRE_JJ is set and jj is not installed: %v", err)
+		if os.Getenv("AGENTCORE_REQUIRE_JJ") != "" {
+			t.Fatalf("AGENTCORE_REQUIRE_JJ is set and jj is not installed: %v", err)
 		}
 		t.Skip("jj is not installed")
 	}

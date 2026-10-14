@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kpenfound/busybees/core/work"
+	"github.com/kpenfound/agentcore/work"
 )
 
 // LedgerEntry records the accounting and caller-defined outcome of one session.

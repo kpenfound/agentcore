@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs core/agent's Landlock enforcement tests on a kernel that has Landlock,
+# Runs agent's Landlock enforcement tests on a kernel that has Landlock,
 # for a machine whose Dagger engine does not (the tests skip there). It boots
 # Debian's kernel under QEMU with no privileges and no network, with the test
 # binary, a static busybox and the container's git as the whole machine. CONTRIBUTING.md has the
@@ -31,7 +31,7 @@ ldd /usr/bin/git | awk '$3 ~ /^\// {print $3} $1 ~ /^\// {print $1}' | while rea
 	cp "$(realpath "$lib")" "$root$(realpath "$lib")"
 	[ -e "$root$lib" ] || { mkdir -p "$root$(dirname "$lib")"; ln -s "$(realpath "$lib")" "$root$lib"; }
 done
-(cd /src/core && CGO_ENABLED=0 go test -c -o "$root/agent.test" ./agent)
+(cd /src && CGO_ENABLED=0 go test -c -o "$root/agent.test" ./agent)
 echo "${TESTRUN:-Landlock}" > "$root/testrun"
 cat > "$root/init" <<'INIT'
 #!/bin/busybox sh

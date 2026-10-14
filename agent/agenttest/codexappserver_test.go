@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/agenttest"
 )
 
 // TestMain lets this package's own test binary double as the fake `codex
@@ -100,7 +100,7 @@ func (c *codexConversation) closeStdin() {
 // validTurnInput is the turn/start "input" every one of this file's
 // conversations sends, except where a test scripts a malformed one on
 // purpose: a non-empty array of one {"type":"text","text":<string>} item,
-// the shape codexRPCRun (core/agent/codex_rpc.go) always sends.
+// the shape codexRPCRun (agent/codex_rpc.go) always sends.
 var validTurnInput = []map[string]any{{"type": "text", "text": "TASK"}}
 
 // handshake drives the fake through initialize and config/read, common to

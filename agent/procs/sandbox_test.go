@@ -68,7 +68,7 @@ func writeSandboxName(t *testing.T, dir, name string) {
 }
 
 // writeSandboxWorkspace records a session's primary-workspace path the way
-// core/agent does: a plain WriteFile, since the package exports no writer.
+// agent does: a plain WriteFile, since the package exports no writer.
 func writeSandboxWorkspace(t *testing.T, dir, path string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {

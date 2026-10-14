@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
-	"github.com/kpenfound/busybees/core/vcs"
+	"github.com/kpenfound/agentcore/agent/agenttest"
+	"github.com/kpenfound/agentcore/vcs"
 )
 
 // realTempDir is a temporary directory by its real path.

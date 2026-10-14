@@ -21,7 +21,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kpenfound/busybees/core/agent"
+	"github.com/kpenfound/agentcore/agent"
 )
 
 // Enforcer fakes the enforcer of one sandbox kind.

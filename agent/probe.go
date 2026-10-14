@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/agentbin"
 )
 
 // A prober runs a short command of the agent's before the turn, where the

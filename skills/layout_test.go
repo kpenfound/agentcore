@@ -210,7 +210,7 @@ func TestSymlinkEscapeRefused(t *testing.T) {
 		t.Fatalf("error %q does not name the reference %q", err, ref.String())
 	}
 
-	// core/skills documents cacheDir/plugins as where every generated
+	// skills documents cacheDir/plugins as where every generated
 	// wrapper lives (see NewManager and internal/skills.go's commitAt
 	// comment); a refused reference must leave it untouched.
 	if exists(filepath.Join(cacheDir, "plugins")) {

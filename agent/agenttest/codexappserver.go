@@ -128,7 +128,7 @@ type CodexAppServerScript struct {
 
 // CodexAppServer arranges for the running test binary, re-executed, to be a
 // fake `codex app-server` scripted by script, the way FAKE_CLAUDE and
-// Runner.ClaudeBin = os.Args[0] do for claude in
+// Runner.ClaudeBin = os.Args[0] do for claude in busybees'
 // internal/scheduler/scheduler_test.go (see CONTRIBUTING.md): it sets
 // CodexAppServerFakeEnv and the script's location for the rest of the
 // calling test (t.Setenv, undone when it ends) and returns the test
@@ -182,7 +182,7 @@ type codexWireMessage struct {
 const codexTurnStartInvalidInput = `invalid request: params.input must be a non-empty array of {"type":"text","text":<string>} items`
 
 // ValidateCodexTurnInput checks raw, turn/start's "input" parameter, against
-// the shape codexRPCRun (core/agent/codex_rpc.go) always sends: a non-empty
+// the shape codexRPCRun (agent/codex_rpc.go) always sends: a non-empty
 // JSON array of items, each an object with a "type" of "text" and a string
 // "text". It returns nil when raw matches that shape, or a *CodexRPCError
 // with code -32600 when it does not — in particular when raw is a bare

@@ -1,4 +1,4 @@
-module github.com/kpenfound/busybees/core
+module github.com/kpenfound/agentcore
 
 go 1.25.0
 

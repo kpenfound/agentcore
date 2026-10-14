@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kpenfound/busybees/core/work"
+	"github.com/kpenfound/agentcore/work"
 )
 
 // OverBudget reports the strict crossing used for completed sessions and work.

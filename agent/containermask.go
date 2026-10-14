@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/agentbin"
 )
 
 // vcsProbe is the script an image is run with to find its VCS executables:

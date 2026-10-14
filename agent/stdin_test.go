@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/agenttest"
 )
 
 // stdinConversationAgent is the name of the Backends entry

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent"
+	"github.com/kpenfound/agentcore/agent"
 )
 
 // FailureKind classifies why a session did not produce a usable result.

@@ -10,8 +10,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
-	"github.com/kpenfound/busybees/core/vcs"
+	"github.com/kpenfound/agentcore/agent/agenttest"
+	"github.com/kpenfound/agentcore/vcs"
 )
 
 // fakeConfiner stands in for the operating system: it records what it is

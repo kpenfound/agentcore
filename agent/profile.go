@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/procs"
+	"github.com/kpenfound/agentcore/agent/procs"
 )
 
 const (

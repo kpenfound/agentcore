@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/vcs"
-	"github.com/kpenfound/busybees/core/vcs/internal/vcstest"
+	"github.com/kpenfound/agentcore/vcs"
+	"github.com/kpenfound/agentcore/vcs/internal/vcstest"
 )
 
 // show formats one commit.

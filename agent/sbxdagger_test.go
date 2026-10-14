@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
-	"github.com/kpenfound/busybees/core/agent/procs"
+	"github.com/kpenfound/agentcore/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/procs"
 )
 
 // echoEngine stands in for a Dagger engine on a Unix socket: it answers

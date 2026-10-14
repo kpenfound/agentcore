@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/agent/procs"
+	"github.com/kpenfound/agentcore/agent/procs"
 )
 
 // sessionDir builds a session directory holding the named files, and returns

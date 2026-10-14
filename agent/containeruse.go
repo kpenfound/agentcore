@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/agentbin"
 )
 
 // A container session whose role sets container_use_environment

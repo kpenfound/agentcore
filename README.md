@@ -1,13 +1,18 @@
-# Core factory components
+# agentcore
 
-`github.com/kpenfound/busybees/core` is a standalone Go module. It imports no
-package from the busybees root module. Build it from this directory with
-`go build ./...`. Tests never run on the host: run them inside Dagger from the
-repository root — [CONTRIBUTING.md](../CONTRIBUTING.md) has the recipes,
-including the one-package command for this module.
+`github.com/kpenfound/agentcore` runs headless coding-agent sessions and the
+pieces a factory built on them needs: the session runner and its execution
+boundary, an MCP host, a review pipeline, workspaces over git and jj, and
+operational primitives. [busybees](https://github.com/kpenfound/busybees) is
+one consumer; its adapters supply the configuration, tracker mapping and
+policy this module leaves to the caller.
 
-The repository's `dagger check` builds, lints, generates and tests both modules.
-The root module consumes this one through its `replace ... => ./core` entry.
+```sh
+go get github.com/kpenfound/agentcore@latest
+```
+
+Build with `go build ./...`. Tests never run on the host: run them inside
+Dagger. [CONTRIBUTING.md](CONTRIBUTING.md) has the recipes.
 
 ## Execution boundary
 
@@ -114,8 +119,8 @@ other list derives from or is held to them. The checklist:
    from), `ProviderEnv` (its configuration and credential variables, `*`
    for a prefix), `ArgvMarker` (whether the command line carries a marker
    the process-table scan finds), a `bin` selector for the runner's
-   executable override, and the implementation. `AgentCredentials` and the
-   factory's `internal/session.ProviderEnv` derive from the descriptors.
+   executable override, and the implementation. `AgentCredentials` and
+   busybees' `internal/session.ProviderEnv` derive from the descriptors.
 2. **Ordinary execution.** Give the implementation its `command` (the
    executable comes from `b.executable(r)`, never named directly) and its
    `consume` (the stream reduced to a `streamEnd`, every cost it carries
@@ -143,7 +148,7 @@ other list derives from or is held to them. The checklist:
 5. **Completeness.** `procs.AgentExecutables` names the executable
    (`TestBackendsMatchProcsExecutables` holds the two together); doctor
    carries the toolchain check (`TestEveryBackendHasAToolchainCheck` in
-   the busybees root); `SbxTemplates` has a template or the sandbox is
+   busybees); `SbxTemplates` has a template or the sandbox is
    refused for it; `profile.go`'s per-agent facts (PiPackages,
    SbxTemplates) say what applies; and the repository's review and role
    documentation names the agent where it lists the ones there are.
@@ -618,7 +623,7 @@ so it grants a session nothing.
 Core implements it for two backends, each over a workspace directory, for a
 provider to delegate to:
 
-- `core/vcs/git.Replayer` detaches the working tree at `Onto` and
+- `vcs/git.Replayer` detaches the working tree at `Onto` and
   cherry-picks the commits one at a time. Each keeps its original's message,
   author and committer, so the same replay gives the same commit ids, and a
   commit that is or becomes empty is kept, so the commit boundaries stay. It
@@ -628,7 +633,7 @@ provider to delegate to:
   `<<<<<<< ` or `>>>>>>> ` line. The state is `core-replay.json` in the
   worktree's git directory. A finished replay leaves the working tree
   detached at the candidate.
-- `core/vcs/jj.Replayer` runs `jj duplicate`, so the originals and every
+- `vcs/jj.Replayer` runs `jj duplicate`, so the originals and every
   bookmark stay. A duplicate is a new change with a change id of its own,
   which is random: `Commits` is what ties it to its original, and no two
   replays are alike. jj records a conflict in the revision, so every
@@ -684,7 +689,7 @@ A commit is never created unsigned: when the signing program fails, or a
 commit comes back without a signature, `Sign` fails with an error wrapping
 `vcs.ErrUnsigned`.
 
-`core/vcs/git.Signer` implements it with `git commit-tree -S` in any git
+`vcs/git.Signer` implements it with `git commit-tree -S` in any git
 store: a working tree, a bare repository, or the git store a Jujutsu
 repository shares, colocated or under `.jj/repo/store/git`. The author and
 committer are the repository's configured identity (`user.name` and

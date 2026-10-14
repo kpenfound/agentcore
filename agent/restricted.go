@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/agentbin"
 )
 
 const (
@@ -220,7 +220,7 @@ func restrictedFailure(name string, res *Result) error {
 
 // RateLimitedText recognizes capacity and transient service-limit messages.
 // It lives with agent execution so restricted fallback chains and callers in
-// core/ops make the same decision.
+// ops make the same decision.
 func RateLimitedText(msg string) bool {
 	msg = strings.ToLower(msg)
 	for _, phrase := range []string{"rate limit", "abuse detection", "secondary rate", "overloaded", "usage limit", "session limit"} {

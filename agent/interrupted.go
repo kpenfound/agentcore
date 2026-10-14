@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kpenfound/busybees/core/agent/procs"
+	"github.com/kpenfound/agentcore/agent/procs"
 )
 
 // ResultFile is the file Run writes when a session ends, whatever it ended
@@ -128,7 +128,7 @@ func CountTurns(path string) int {
 	for sc.Scan() {
 		// Codex's JSON-RPC connection carries no "type" field at all: a
 		// completed item is the "item/completed" notification named by
-		// Method, same as internal/tui/transcript.go reads it. Delta
+		// Method, same as busybees' internal/tui/transcript.go reads it. Delta
 		// notifications and bees' own requests and responses on the same
 		// connection carry a Method too (or none), but never this one, so
 		// they fall through uncounted.

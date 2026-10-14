@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent"
+	"github.com/kpenfound/agentcore/agent"
 )
 
 func TestClassifyFailure(t *testing.T) {

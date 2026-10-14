@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kpenfound/busybees/core/work"
+	"github.com/kpenfound/agentcore/work"
 )
 
 // WorkFile records the caller's work reference independently of session names.

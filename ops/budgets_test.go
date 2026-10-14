@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/work"
+	"github.com/kpenfound/agentcore/work"
 )
 
 // TestOverBudgetStreak: the streak is per work item, and any session within

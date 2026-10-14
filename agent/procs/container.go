@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/agentbin"
 )
 
 // A session in the container sandbox is found differently from one on the
@@ -175,7 +175,7 @@ const sandboxRemoveTimeout = 60 * time.Second
 // collecting its directory entries and asking CleanSandboxDirs about them,
 // the way FromPIDFiles asks FromPIDFile about every entry in turn. sbxBin is
 // the sbx binary to run — a caller's Runner.SbxBin, or agent.SandboxCLI by
-// default — because this package cannot import core/agent. It must run at
+// default — because this package cannot import agent. It must run at
 // startup, before any session starts, so that every sandbox-name or
 // primary-workspace record it finds belongs to a session an earlier process
 // died without closing, never one still in use.
@@ -255,7 +255,7 @@ func cleanSandboxName(ctx context.Context, sbxBin, dir string) error {
 // remove: the workspace path rule. cleanup is not given the Runner's
 // NamePrefix (it may be the default "agent-", a caller's own value, or
 // empty), so the rule accepts any prefix before "sbx-primary-" and checks
-// only what every core/agent primary workspace has in common: p is
+// only what every agent primary workspace has in common: p is
 // absolute; its cleaned parent directory is os.TempDir(); and its base name
 // contains the literal substring "sbx-primary-" with at least one character
 // following its last occurrence. A forged prefix gains an attacker nothing:

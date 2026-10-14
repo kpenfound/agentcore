@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/kpenfound/busybees/core/work"
+	"github.com/kpenfound/agentcore/work"
 )
 
 // OutcomeFile is the file a session's outcome is written to inside the

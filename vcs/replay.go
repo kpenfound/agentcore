@@ -7,7 +7,7 @@ import (
 
 // Replayer is an optional capability of a Provider: it replays a range of
 // revisions onto another revision in a workspace the caller retains, and
-// leaves every branch where it is. core/vcs/git and core/vcs/jj implement
+// leaves every branch where it is. vcs/git and vcs/jj implement
 // it over a workspace directory. A caller finds it by type assertion:
 //
 //	if r, ok := provider.(vcs.Replayer); ok { ... }

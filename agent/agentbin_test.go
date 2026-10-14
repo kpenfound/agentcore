@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/agentbin"
 )
 
 // TestARealAgentNeverRunsFromATestBinary pins the guard every session goes

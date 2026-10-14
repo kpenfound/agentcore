@@ -13,7 +13,7 @@ import (
 	"github.com/dop251/goja"
 	"golang.org/x/sys/unix"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/agenttest"
 )
 
 // fakeBunEnv set to 1 makes the test binary a stand-in for the JavaScript

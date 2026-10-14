@@ -10,7 +10,7 @@ import (
 // the repository's own identity, signing key and signing format. It runs
 // in the caller's process with the caller's VCS access and credentials:
 // it is not a session, and it grants a session nothing, so a session that
-// produced the trees never holds the signing key. core/vcs/git implements
+// produced the trees never holds the signing key. vcs/git implements
 // it for any git store, the one a Jujutsu repository shares included.
 //
 // A signing moves no branch and writes no file of a working tree. Each

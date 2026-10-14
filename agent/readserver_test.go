@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/agenttest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

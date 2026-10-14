@@ -18,8 +18,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
-	"github.com/kpenfound/busybees/core/agent/procs"
+	"github.com/kpenfound/agentcore/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/procs"
 )
 
 // A container session runs the backend command unchanged inside the engine.

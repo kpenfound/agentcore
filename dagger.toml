@@ -1,0 +1,23 @@
+# Dagger workspace configuration
+
+[modules.go]
+source = "github.com/dagger/go@collections"
+
+# The Go tests, linters and generators run in agentcore-dev's test runtime
+# (.dagger/modules/agentcore-dev): golang:1.26-bookworm with jj, which
+# vcs/jj's replay tests and vcs/git's jj signing tests run.
+[modules.go.settings]
+base = "dag://agentcore-dev/test-runtime"
+
+[modules.dagger-dang-sdk]
+source = "github.com/dagger/dang-sdk"
+
+[sdks.dang]
+module = "dagger-dang-sdk"
+
+[modules.agentcore-dev]
+entrypoint = true
+source = ".dagger/modules/agentcore-dev"
+
+[sdks.dang.scopes.".dagger/modules/agentcore-dev"]
+is-module = true

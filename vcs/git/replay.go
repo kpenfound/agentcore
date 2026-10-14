@@ -14,7 +14,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/kpenfound/busybees/core/vcs"
+	"github.com/kpenfound/agentcore/vcs"
 )
 
 // Replayer replays revisions in a git working tree, one commit at a time

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent"
-	"github.com/kpenfound/busybees/core/mcphost"
-	"github.com/kpenfound/busybees/core/work"
+	"github.com/kpenfound/agentcore/agent"
+	"github.com/kpenfound/agentcore/mcphost"
+	"github.com/kpenfound/agentcore/work"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

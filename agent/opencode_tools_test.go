@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/agenttest"
 )
 
 // grantedInherited is the configuration the fake opencode inherits from

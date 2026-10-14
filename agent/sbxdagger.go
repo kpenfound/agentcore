@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/agentbin"
 )
 
 // A SandboxSbx session whose profile asks for Dagger (Profile.Dagger) is

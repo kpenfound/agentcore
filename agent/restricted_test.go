@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
-	"github.com/kpenfound/busybees/core/vcs"
+	"github.com/kpenfound/agentcore/agent/agenttest"
+	"github.com/kpenfound/agentcore/vcs"
 )
 
 const restrictedClaudeAnswer = `echo '{"type":"result","subtype":"success","is_error":false,"result":"the brief","session_id":"sess-1","num_turns":3,"total_cost_usd":0.5}'`

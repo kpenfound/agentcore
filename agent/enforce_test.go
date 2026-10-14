@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
-	"github.com/kpenfound/busybees/core/vcs"
+	"github.com/kpenfound/agentcore/agent/agenttest"
+	"github.com/kpenfound/agentcore/vcs"
 )
 
 // okAgent is a fake claude that records its arguments in the directory

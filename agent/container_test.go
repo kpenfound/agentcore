@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
-	"github.com/kpenfound/busybees/core/agent/procs"
-	"github.com/kpenfound/busybees/core/vcs"
+	"github.com/kpenfound/agentcore/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/procs"
+	"github.com/kpenfound/agentcore/vcs"
 )
 
 // fakeDocker writes a shell script standing in for the docker CLI: `run`

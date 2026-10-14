@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/procs"
+	"github.com/kpenfound/agentcore/agent/procs"
 )
 
 // A backend is one CLI a session can run as, chosen by the role's resolved

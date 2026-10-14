@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/work"
+	"github.com/kpenfound/agentcore/work"
 )
 
 func TestAppendAndReadLedger(t *testing.T) {

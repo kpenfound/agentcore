@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kpenfound/busybees/core/vcs"
+	"github.com/kpenfound/agentcore/vcs"
 )
 
 // Signer creates signed commits with `git commit-tree -S`, in any git

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kpenfound/busybees/core/agent/agentbin"
+	"github.com/kpenfound/agentcore/agent/agentbin"
 )
 
 // Enforcer prepares turns of one sandbox kind that are held to their grants

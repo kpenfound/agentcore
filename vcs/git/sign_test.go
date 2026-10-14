@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/vcs"
-	"github.com/kpenfound/busybees/core/vcs/internal/vcstest"
+	"github.com/kpenfound/agentcore/vcs"
+	"github.com/kpenfound/agentcore/vcs/internal/vcstest"
 )
 
 // fakeGPG signs anything: it records its arguments in calls beside it and
@@ -479,8 +479,8 @@ func TestSignWithADisposableSSHKey(t *testing.T) {
 func requireJJ(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("jj"); err != nil {
-		if os.Getenv("BUSYBEES_REQUIRE_JJ") != "" {
-			t.Fatalf("BUSYBEES_REQUIRE_JJ is set and jj is not installed: %v", err)
+		if os.Getenv("AGENTCORE_REQUIRE_JJ") != "" {
+			t.Fatalf("AGENTCORE_REQUIRE_JJ is set and jj is not installed: %v", err)
 		}
 		t.Skip("jj is not installed")
 	}

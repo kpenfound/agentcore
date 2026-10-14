@@ -10,10 +10,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/kpenfound/busybees/core/agent"
-	"github.com/kpenfound/busybees/core/agent/agenttest"
-	"github.com/kpenfound/busybees/core/agent/agenttest/enforcertest"
-	"github.com/kpenfound/busybees/core/vcs"
+	"github.com/kpenfound/agentcore/agent"
+	"github.com/kpenfound/agentcore/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/agenttest/enforcertest"
+	"github.com/kpenfound/agentcore/vcs"
 )
 
 // layout is a pinned working directory, a writable session directory and a

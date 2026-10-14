@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kpenfound/busybees/core/work"
+	"github.com/kpenfound/agentcore/work"
 )
 
 // Event describes caller-defined activity. Kind, role, stage, phase and outcome

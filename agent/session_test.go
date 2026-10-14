@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
-	"github.com/kpenfound/busybees/core/agent/procs"
+	"github.com/kpenfound/agentcore/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/procs"
 )
 
 // fakeClaude writes a shell script standing in for the claude binary.
@@ -287,7 +287,7 @@ kill -9 $$
 // the initialized notification, then thread/start with threadID and
 // turn/start with turnID, each echoing the request's own id, the way the
 // real server answers them. turn/start's own line is checked against the
-// same shape codexRPCRun must send (core/agent/codex_rpc.go): a non-empty
+// same shape codexRPCRun must send (agent/codex_rpc.go): a non-empty
 // array of {"type":"text","text":<string>} items, not a bare string. A
 // malformed one gets the JSON-RPC -32600 error every fake `codex
 // app-server` in this repository answers it with, and the script exits
@@ -324,7 +324,7 @@ func fakeCodexAppServer(t *testing.T, threadID, turnID, body string) string {
 
 // TestCodexAppServerHandshakeRejectsStringInput drives
 // codexAppServerHandshake's fake directly over pipes, the way
-// core/agent's own tests use it through fakeCodexAppServer, and checks
+// agent's own tests use it through fakeCodexAppServer, and checks
 // that a turn/start whose input is a bare string — the shape codex_rpc.go
 // must never regress to — gets JSON-RPC error -32600, with the script's
 // own notifications never sent.
@@ -1112,7 +1112,7 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"ok"}'
 }
 
 // TestCodexSessionCompletesThroughTheSharedFakeNewThread drives a whole
-// Codex session through core/agent's Runner against the shared fake
+// Codex session through agent's Runner against the shared fake
 // `codex app-server` (agenttest.CodexAppServer) for a new thread: the
 // session completes without error, with its id from thread/start's
 // answer, at least one recorded turn (NumTurns, from the fake's

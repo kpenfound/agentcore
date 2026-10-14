@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kpenfound/busybees/core/agent/agenttest"
+	"github.com/kpenfound/agentcore/agent/agenttest"
 )
 
 // codexHeldProfile is the profile a held codex turn's tests run: granted a
