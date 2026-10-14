@@ -145,7 +145,7 @@ type piMCPConfig struct {
 // entry by command, one with a url by url, an entry with neither left out.
 // The adapter expands ${VAR} in env and header values, which is how a
 // bearer token is referred to by the variable holding it, and runs a value
-// that starts with "!" as a command; a value bees means literally is
+// that starts with "!" as a command; a value the runner means literally is
 // written with that "!" doubled, the adapter's escape for it.
 func piServers(entries map[string]MCPEntry) map[string]piServer {
 	out := map[string]piServer{}

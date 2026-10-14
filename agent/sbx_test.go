@@ -48,7 +48,7 @@ printf '{"status":"submitted","work":{"key":"task/7","tags":{"ticket":"seven"}}}
 	metadata, worktree := workspaceFixture(t)
 	r := newRunner(t, claude)
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	role := Profile{Name: "builder", Model: "opus", MaxTurns: 5, Timeout: time.Minute,
 		Sandbox: SandboxSbx, SandboxImage: "ghcr.io/acme/task:1",
@@ -286,7 +286,7 @@ func TestSandboxWorkingDirectoryInsideReadOnlyInputs(t *testing.T) {
 	}
 	r := newRunner(t, fakeClaude(t, `echo '{"type":"result","subtype":"success","result":"ok"}'`))
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	r.Mounts = []Mount{{Path: inputs, Access: ReadOnly}}
 	engine := filepath.Dir(r.SbxBin)
@@ -351,7 +351,7 @@ echo '{"type":"result","subtype":"success","result":"ok"}'
 `)
 	r := newRunner(t, claude)
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	r.Mounts = []Mount{{Path: inputs, Access: ReadOnly}}
 	engine := filepath.Dir(r.SbxBin)
@@ -402,7 +402,7 @@ func TestSandboxStartFailureRemovesTheSandbox(t *testing.T) {
 	}
 	r := newRunner(t, fakeClaude(t, `touch "$TASK_SESSION_DIR/ran"`))
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	r.Mounts = []Mount{{Path: inputs, Access: ReadOnly}}
 	engine := filepath.Dir(r.SbxBin)
@@ -450,7 +450,7 @@ func TestSandboxSessionPassesTheSessionsHOME(t *testing.T) {
 	t.Setenv("HOME", "/Users/operator")
 	r := newRunner(t, fakeClaude(t, `echo '{"type":"result","subtype":"success","result":"ok"}'`))
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	role := Profile{Name: "builder", Sandbox: SandboxSbx, Env: map[string]string{"HOME": "/home/role"}}
 	res, err := r.Run(context.Background(), Request{Name: "home", Profile: role, Workspace: fakeWorkspace{dir: t.TempDir()}})
@@ -721,7 +721,7 @@ func TestStoppedSandboxSessionIsRemoved(t *testing.T) {
 	claude := fakeClaude(t, `sleep 5`)
 	r := newRunner(t, claude)
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	role := Profile{Name: "auditor", Model: "opus", MaxTurns: 1, Timeout: 200 * time.Millisecond, Sandbox: SandboxSbx}
 	res, err := r.Run(context.Background(), Request{Name: "slow", Profile: role, Workspace: fakeWorkspace{dir: t.TempDir()}})
@@ -746,7 +746,7 @@ func TestStoppedSandboxSessionIsRemoved(t *testing.T) {
 func TestSandboxPolicyFailureStopsTheSession(t *testing.T) {
 	r := newRunner(t, fakeClaude(t, `touch "$TASK_SESSION_DIR/ran"`))
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	engine := filepath.Dir(r.SbxBin)
 	if err := os.WriteFile(filepath.Join(engine, "fail-policy"), nil, 0o644); err != nil {
@@ -788,7 +788,7 @@ func TestSandboxPolicyFailureStopsTheSession(t *testing.T) {
 func TestSandboxCreateFailureStartsNothing(t *testing.T) {
 	r := newRunner(t, fakeClaude(t, `echo '{"type":"result","subtype":"success","result":"ok"}'`))
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	if err := os.WriteFile(filepath.Join(filepath.Dir(r.SbxBin), "fail-create"), nil, 0o644); err != nil {
 		t.Fatal(err)
@@ -869,7 +869,7 @@ echo '{"type":"step_finish","sessionID":"s1","part":{"type":"step-finish","reaso
 			r := newRunner(t, "")
 			r.CodexBin, r.OpenCodeBin = bin, bin
 			r.SbxBin = fakeSbx(t)
-			r.ServerBin = fakeBees(t)
+			r.ServerBin = fakeTaskServer(t)
 			r.StateDir = t.TempDir()
 			role := Profile{Name: "builder", Agent: tc.agent, Timeout: time.Minute, Sandbox: SandboxSbx}
 			res, err := r.Run(context.Background(), Request{Name: "boxed", Profile: role, Workspace: fakeWorkspace{dir: t.TempDir()}, Prompt: "TASK"})

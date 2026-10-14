@@ -7,7 +7,7 @@ import (
 )
 
 // Reference is caller-owned review identity. Its JSON representation is preserved
-// in artifacts; core only uses its display text, link and opaque rule scope.
+// in artifacts; agentcore only uses its display text, link and opaque rule scope.
 // Implementations used with ReadBrief/ReadArtifact must support JSON decoding.
 type Reference interface {
 	fmt.Stringer

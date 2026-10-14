@@ -63,8 +63,8 @@ builders, stream parsers, timeout and process-group lifecycle as `Run`, but it
 owns the capability contract instead of accepting caller grants. The request
 may carry only a workspace, prompt, resume id, environment, cost cap and the
 profile's agent/model/effort/turn/timeout/fallback settings. It receives no MCP server,
-outcome contract, writable mount, VCS access, skill, plugin or hook. Factory and
-VCS identity variables are removed. Claude is held to named read-only tools,
+outcome contract, writable mount, VCS access, skill, plugin or hook. Variables
+with the runner's `EnvironmentPrefix` and VCS identity variables are removed. Claude is held to named read-only tools,
 empty settings sources and strict empty MCP configuration; Codex is held to its
 read-only sandbox, disabled command/network/plugin features and a fail-closed
 inventory that disables every inherited MCP server. Restricted Codex also sets
@@ -119,8 +119,8 @@ other list derives from or is held to them. The checklist:
    from), `ProviderEnv` (its configuration and credential variables, `*`
    for a prefix), `ArgvMarker` (whether the command line carries a marker
    the process-table scan finds), a `bin` selector for the runner's
-   executable override, and the implementation. `AgentCredentials` and
-   busybees' `internal/session.ProviderEnv` derive from the descriptors.
+   executable override, and the implementation. `AgentCredentials` and the
+   provider environment a caller grants derive from the descriptors.
 2. **Ordinary execution.** Give the implementation its `command` (the
    executable comes from `b.executable(r)`, never named directly) and its
    `consume` (the stream reduced to a `streamEnd`, every cost it carries
@@ -146,9 +146,8 @@ other list derives from or is held to them. The checklist:
    turn to the granted built-in tools, and a `Remedy` everywhere else.
    `TestEveryBackendDeclaresWritableToolsForEveryPlacement` pins them.
 5. **Completeness.** `procs.AgentExecutables` names the executable
-   (`TestBackendsMatchProcsExecutables` holds the two together); doctor
-   carries the toolchain check (`TestEveryBackendHasAToolchainCheck` in
-   busybees); `SbxTemplates` has a template or the sandbox is
+   (`TestBackendsMatchProcsExecutables` holds the two together); a
+   caller's doctor carries the toolchain check; `SbxTemplates` has a template or the sandbox is
    refused for it; `profile.go`'s per-agent facts (PiPackages,
    SbxTemplates) say what applies; and the repository's review and role
    documentation names the agent where it lists the ones there are.
@@ -221,7 +220,7 @@ builder: grant cannot be enforced: agent "opencode" cannot hold a writable turn 
   `lsp`, `read`, `skill`, `todoread`, `todowrite`, `webfetch` and `websearch`.
   Any other name is refused, and so is `task`: its subagents run under their
   own permissions, not the turn's. The turn runs with `--pure` as a
-  generated primary agent, `bees-granted`, whose permissions deny `*`, allow
+  generated primary agent, `agentcore-granted`, whose permissions deny `*`, allow
   each granted tool, and allow `<server>_*` for each of the session's MCP
   servers. A server whose `<server>_*` would also match one of opencode's
   own permissions is refused: a server named `external`, whose
@@ -299,7 +298,7 @@ builder: grant cannot be enforced: agent "opencode" cannot hold a writable turn 
   must be the command line (`sessionFlags`), not a managed layer above it,
   and where the answer shows the value, the value must be the one given.
   A held turn still sees Codex's `exec` and `wait` (the JavaScript host
-  that calls the other tools), `request_user_input_async`, which bees
+  that calls the other tools), `request_user_input_async`, which the runner
   refuses as an unsupported server request, and `clock`, which reads the
   time.
 - Pi needs `ToolsAll`.
@@ -570,7 +569,7 @@ result, err := session.Run(ctx, request)
   again, under the name a symbolic link gives a directory of the request.
 - Tools are held by the agent itself, not by the prompt: `claude` is
   started with `--tools` and `--strict-mcp-config`, opencode as its
-  `bees-granted` agent and codex with configuration derived from the grant
+  `agentcore-granted` agent and codex with configuration derived from the grant
   (see [Built-in tool grants](#built-in-tool-grants)), and a request for pi
   with anything less than `ToolsAll` is refused.
 - A session runs any number of turns. After `Release`, `Run` returns
@@ -587,7 +586,7 @@ The runner performs no git discovery. A denied profile never reads `VCS()`.
 releases it, and prunes stale metadata. The caller owns this lifetime: a workspace
 may span several sessions and retries. Release it on success, errors and
 cancellation, using `context.WithoutCancel` for cleanup after cancellation.
-Providers own retention policy and interpret refs; core does neither.
+Providers own retention policy and interpret refs; agentcore does neither.
 
 ### Replaying revisions
 
@@ -620,7 +619,7 @@ to where it was. A second `Replay` in the same workspace is refused with
 caller's VCS access: it fetches and pushes nothing, and it is not a session,
 so it grants a session nothing.
 
-Core implements it for two backends, each over a workspace directory, for a
+agentcore implements it for two backends, each over a workspace directory, for a
 provider to delegate to:
 
 - `vcs/git.Replayer` detaches the working tree at `Onto` and
@@ -644,12 +643,12 @@ provider to delegate to:
   copy on a new change on top of the candidate. jj runs with a
   configuration of the replayer's own (`JJ_CONFIG`), not the user's.
 
-Busybees implements this contract in `internal/workspace`, serializing git
-operations on its main clone and supplying its shared git directory as a mount.
-Its scheduler adds fetch, commits-ahead and branch deletion operations at the
-busybees boundary. Its session adapter supplies git/GitHub identity and push
-configuration through the VCS environment fields. Busybees profiles allow VCS
-access; another caller can supply a plain directory and deny it.
+A caller implements this contract over its own VCS: for example a git
+provider that serializes operations on a main clone and supplies its shared
+git directory as a mount, with fetch, push and branch operations kept on the
+caller's side. Its session adapter supplies VCS identity and push
+configuration through the VCS environment fields. A caller that needs no VCS
+supplies a plain directory and denies VCS access.
 
 ### Signing commits
 
@@ -706,14 +705,13 @@ no hook and fetches and pushes nothing.
 ## Work identity
 
 `work.Ref` carries an opaque string `Key` and caller-defined string `Tags`.
-Core stores and compares these values without interpreting tracker identity.
+agentcore stores and compares these values without interpreting tracker identity.
 `agent.Outcome.Work` records the reported work, and `agent.WriteWork` and
 `agent.ReadWork` persist it in a session's `work.json` marker. Keys have a
 bounded, case-safe hashed filename representation for bookkeeping stores.
 
-Busybees supplies GitHub mapping and a one-time upgrade of its existing state
-directories. Transcript, PID and interruption artifacts keep their formats;
-GitHub environment parameters and touched-issue files stay in its adapter.
+The caller maps its tracker's identity to keys and tags. Tracker environment
+parameters and tracker-specific artifacts stay in the caller's adapter.
 
 ## Testing
 
@@ -724,8 +722,8 @@ starting Docker. It answers a `NewContainer` session's look into its image
 from `image-vcs.txt` beside the script (`f <path>` or `d <path>` a line, no
 VCS executables without the file), records that command in
 `docker-probe.txt`, and fails it when a file named `fail-probe` is there.
-Busybees adapter tests use these same fakes for its environment, identity and
-MCP contracts.
+Callers' adapter tests use these same fakes for their environment, identity
+and MCP contracts.
 
 `agenttest/enforcertest` is an `agent.Enforcer` that starts no process. It
 checks grants and requests with `agent.NewPolicy` and `agent.Admit`, the code
@@ -798,9 +796,9 @@ defer lease.Close()
 and a reporting callback that validates and records `agent.Outcome`. Empty status
 lists leave the schema unrestricted; the callback remains responsible for policy.
 `AddDoneTool` accepts a custom typed input and decoder for an existing wire
-contract. Each call receives a copy of the default work tags. Busybees uses this
-adapter to keep issue/PR fields and their defaults, state migration and PR outcome
-requirements outside core.
+contract. Each call receives a copy of the default work tags. A caller uses this
+adapter to keep its own outcome fields and their defaults, state migration and
+outcome requirements outside agentcore.
 
 ## Operational primitives
 
@@ -832,10 +830,10 @@ poll a tracker, choose a workflow, log, or escalate work:
   tick consumes a pending wake; `Drain` also lets an immediate full pass consume
   it. The caller owns timers, full passes, and how many loops exist.
 
-Busybees keeps one loop per project. Its adapter chooses the 24-hour budget
-window, retention floor, retry configuration, eight-hour reported-reset cap,
-two-session budget streak and three-failure degraded threshold. It renders
-status and logs, maps work to GitHub and decides what operational signals do.
+The caller decides how many loops exist and chooses the budget window,
+retention floor, retry configuration, reported-reset cap, budget streak and
+degraded threshold. It renders status and logs, maps work to its tracker and
+decides what operational signals do.
 
 ## Review pipeline
 
@@ -846,7 +844,7 @@ diff (`Bundle.Excluded`) pass through to the brief, and `Exclude` drops a
 finding anchored in one of those files after the judge. `R` is the caller's reference
 type, with display text, a URL and an opaque scope for reviewer-note rules.
 Its JSON representation is preserved in `brief.json`; it must support decoding
-when artifacts are read back. Core does not interpret tracker identity.
+when artifacts are read back. agentcore does not interpret tracker identity.
 
 Supply `Distiller.Agent` and `Angles.Agent` through the small `review.Agent`
 interface. `Angles.AgentFor` can select a prepared agent and recorded model for
@@ -862,7 +860,7 @@ provides the rules included in angle prompts.
 
 The caller owns directory naming and acquisition. `Angles.Prepare` optionally
 supplies a working directory; otherwise angles use `Angles.Dir` or an artifact
-scratch directory. Core writes the diff only into a directory the review owns,
+scratch directory. agentcore writes the diff only into a directory the review owns,
 never into `Angles.Dir`. Before the brief is persisted, an error removes the
 artifact directory and acquired files in it. Later errors retain the completed
 stages for inspection. One failed angle is non-fatal when another succeeds.

@@ -56,7 +56,7 @@ func restrictedArgs(t *testing.T, record, suffix string) []string {
 
 func restrictedRunner(t *testing.T, claude, codex string) *Runner {
 	t.Helper()
-	return &Runner{ClaudeBin: claude, CodexBin: codex, SessionsDir: t.TempDir(), EnvironmentPrefix: "BEES_"}
+	return &Runner{ClaudeBin: claude, CodexBin: codex, SessionsDir: t.TempDir(), EnvironmentPrefix: "TASK_"}
 }
 
 // restrictedCodexScript fills in the scripted `codex app-server`
@@ -112,7 +112,7 @@ func restrictedOpenCodeFakeScanning(t *testing.T, config, answer, scan string) (
 else
   enabled=true
 fi
-printf '{"agent":{"bees-read-only":{"mode":"primary","permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow"}}},"mcp":{"legacy":{"enabled":%s}}}\n' "$enabled"`
+printf '{"agent":{"agentcore-read-only":{"mode":"primary","permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow"}}},"mcp":{"legacy":{"enabled":%s}}}\n' "$enabled"`
 	}
 	script := openCodeScanProbe(record, scan) + `if [ "$1" = "--pure" ] && [ "$2" = "debug" ]; then
   printf '%s\n' "$@" > "` + record + `.config-args"
@@ -235,7 +235,7 @@ func TestRunRestrictedCodexCannotDelegateWhenModelExposesCollaboration(t *testin
 
 func TestRunRestrictedUsesTheSharedOpenCodeBackend(t *testing.T) {
 	t.Setenv(EnvOpenCodePermission, `{"*":"allow"}`)
-	t.Setenv(EnvOpenCodeConfigContent, `{"agent":{"bees-read-only":{"permission":{"bash":"allow"}}}}`)
+	t.Setenv(EnvOpenCodeConfigContent, `{"agent":{"agentcore-read-only":{"permission":{"bash":"allow"}}}}`)
 	t.Setenv("OPENCODE_CONFIG_DIR", "/inherited/plugins")
 	bin, record := restrictedOpenCodeFake(t, "", restrictedOpenCodeAnswer)
 	r := restrictedRunner(t, "", "")
@@ -325,12 +325,12 @@ func TestRunRestrictedUsesTheSharedPiBackend(t *testing.T) {
 }
 
 func TestRunRestrictedDeniesInheritedIdentityConfigurationAndMCP(t *testing.T) {
-	t.Setenv("BEES_ROLE", "reviewer")
+	t.Setenv("TASK_ROLE", "reviewer")
 	t.Setenv("GIT_DIR", "/shared/repo")
 	t.Setenv("REVIEW_SAFE", "inherited")
 	bin, record := restrictedFake(t, "claude", restrictedClaudeAnswer)
 	req := restrictedRequestFor(AgentClaude, t.TempDir())
-	req.Env = map[string]string{"BEES_SESSION_DIR": "/factory", "GIT_WORK_TREE": "/repo", "ROLE_SAFE": "yes"}
+	req.Env = map[string]string{"TASK_SESSION_DIR": "/factory", "GIT_WORK_TREE": "/repo", "ROLE_SAFE": "yes"}
 	res, err := restrictedRunner(t, bin, "").RunRestricted(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -339,7 +339,7 @@ func TestRunRestrictedDeniesInheritedIdentityConfigurationAndMCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, gone := range []string{"BEES_ROLE=", "BEES_SESSION_DIR=", "GIT_DIR=", "GIT_WORK_TREE="} {
+	for _, gone := range []string{"TASK_ROLE=", "TASK_SESSION_DIR=", "GIT_DIR=", "GIT_WORK_TREE="} {
 		if strings.Contains(string(env), gone) {
 			t.Errorf("restricted environment contains %q:\n%s", gone, env)
 		}
@@ -371,7 +371,7 @@ func TestRunRestrictedDeniesInheritedIdentityConfigurationAndMCP(t *testing.T) {
 
 func TestRunRestrictedDisablesEveryInheritedCodexMCPServer(t *testing.T) {
 	bin, record := agenttest.CodexAppServer(t, restrictedCodexScript(agenttest.CodexAppServerScript{
-		MCPServers: []string{"bees", "server.with.dots", `server "quoted"`, "restricted_read"},
+		MCPServers: []string{"tasks", "server.with.dots", `server "quoted"`, "restricted_read"},
 	}))
 	if _, err := restrictedRunner(t, "", bin).RunRestricted(context.Background(), restrictedRequestFor(AgentCodex, t.TempDir())); err != nil {
 		t.Fatal(err)
@@ -381,7 +381,7 @@ func TestRunRestrictedDisablesEveryInheritedCodexMCPServer(t *testing.T) {
 	joined := strings.Join(args, "\n")
 	// Every inherited server is disabled; one named like the read server is
 	// replaced by it, not disabled and not left as it was.
-	want := `mcp_servers={"bees"={enabled=false},"server.with.dots"={enabled=false},"server \"quoted\""={enabled=false},"restricted_read"={url="http://127.0.0.1:`
+	want := `mcp_servers={"tasks"={enabled=false},"server.with.dots"={enabled=false},"server \"quoted\""={enabled=false},"restricted_read"={url="http://127.0.0.1:`
 	if !strings.Contains(joined, want) || strings.Count(joined, `"restricted_read"=`) != 1 {
 		t.Errorf("configured MCP servers were not disabled:\n%s", joined)
 	}
@@ -408,9 +408,9 @@ func TestRunRestrictedFailsClosedBeforeOpenCodeLaunch(t *testing.T) {
 		name, config, want string
 	}{
 		{"malformed inventory", `echo invalid`, "decode effective configuration"},
-		{"agent permissions widened", `echo '{"agent":{"bees-read-only":{"mode":"primary","permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow","bash":"allow"}}},"mcp":{}}'`, "exact read-only permissions"},
-		{"agent disabled", `echo '{"agent":{"bees-read-only":{"mode":"primary","disable":true,"permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow"}}},"mcp":{}}'`, "disabled agent"},
-		{"MCP re-enabled", `echo '{"agent":{"bees-read-only":{"mode":"primary","permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow"}}},"mcp":{"inherited":{"enabled":true}}}'`, "MCP server \"inherited\" is not disabled"},
+		{"agent permissions widened", `echo '{"agent":{"agentcore-read-only":{"mode":"primary","permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow","bash":"allow"}}},"mcp":{}}'`, "exact read-only permissions"},
+		{"agent disabled", `echo '{"agent":{"agentcore-read-only":{"mode":"primary","disable":true,"permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow"}}},"mcp":{}}'`, "disabled agent"},
+		{"MCP re-enabled", `echo '{"agent":{"agentcore-read-only":{"mode":"primary","permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow"}}},"mcp":{"inherited":{"enabled":true}}}'`, "MCP server \"inherited\" is not disabled"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bin, record := restrictedOpenCodeFake(t, tc.config, restrictedOpenCodeAnswer)

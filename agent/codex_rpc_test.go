@@ -527,7 +527,7 @@ func TestCodexRPCAnswersServerRequests(t *testing.T) {
 	if answer.Error == nil {
 		t.Fatalf("answer = %+v, want a JSON-RPC error", answer)
 	}
-	const want = "item/commandExecution/requestApproval is not supported in a bees session"
+	const want = "item/commandExecution/requestApproval is not supported in an agentcore session"
 	if answer.Error.Message != want {
 		t.Errorf("answer error message = %q, want %q", answer.Error.Message, want)
 	}
@@ -608,7 +608,7 @@ func TestCodexRPCServerRequestsDuringTurn(t *testing.T) {
 			t.Errorf("%s answer = %+v, want a JSON-RPC error", r.method, a)
 			continue
 		}
-		want := r.method + " is not supported in a bees session"
+		want := r.method + " is not supported in an agentcore session"
 		if a.Error.Message != want {
 			t.Errorf("%s answer error message = %q, want %q", r.method, a.Error.Message, want)
 		}
@@ -648,7 +648,7 @@ func TestCodexRPCServerRequestDuringTurnStart(t *testing.T) {
 	if answer.Error == nil {
 		t.Fatalf("answer = %+v, want a JSON-RPC error", answer)
 	}
-	const want = "item/fileChange/requestApproval is not supported in a bees session"
+	const want = "item/fileChange/requestApproval is not supported in an agentcore session"
 	if answer.Error.Message != want {
 		t.Errorf("answer error message = %q, want %q", answer.Error.Message, want)
 	}
@@ -696,7 +696,7 @@ func TestCodexAnswerClosedRule(t *testing.T) {
 			if !ok {
 				t.Fatalf("%s error field = %#v, want an object", method, errField)
 			}
-			want := method + " is not supported in a bees session"
+			want := method + " is not supported in an agentcore session"
 			if errMap["message"] != want {
 				t.Errorf("%s error message = %v, want %q", method, errMap["message"], want)
 			}

@@ -93,7 +93,7 @@ func TestADistillerThatReportedNoCostLeavesTheBriefUnknown(t *testing.T) {
 
 func TestTheFactsInTheBriefComeFromTheBundle(t *testing.T) {
 	// A session that answered with a pull request, a title or a session id
-	// of its own is answering something it was not asked: bees knows those,
+	// of its own is answering something it was not asked: the caller knows those,
 	// and takes them from the gather.
 	agent := &fakeAgent{answer: `{"summary": "s", "size": "xs", "ref": {"repo": "evil/repo", "number": 1},
 		"title": "a title of its own", "session_id": "made up",

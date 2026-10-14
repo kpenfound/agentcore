@@ -302,7 +302,7 @@ func agentProcess(t *testing.T, name string, argv ...string) *exec.Cmd {
 // An opencode session carries no marker the ps scan can match, so its pid
 // file is all that records it. Find keeps it, because the process table
 // says the pid runs an agent, and leaves the file where it is: a session
-// bees kill did not find would be stopped by nothing, and CheckInterrupted
+// Find did not report would be stopped by nothing, and CheckInterrupted
 // would read a running session as interrupted once the file was gone.
 func TestFindKeepsTheSessionOfAnUnmarkedAgent(t *testing.T) {
 	sessions := t.TempDir()

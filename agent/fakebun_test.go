@@ -28,7 +28,7 @@ import (
 // behaves the same for cases the production script does not exercise, and
 // whether bun itself honours --config=/dev/null and --no-env-file the way
 // this fake assumes.
-const fakeBunEnv = "BEES_TEST_FAKE_BUN"
+const fakeBunEnv = "AGENTCORE_TEST_FAKE_BUN"
 
 func TestMain(m *testing.M) {
 	if os.Getenv(fakeBunEnv) == "1" {

@@ -147,8 +147,7 @@ func restrictedEnvNames(prefix string, sets ...map[string]string) []string {
 }
 
 func restrictedEnvName(prefix, name string) bool {
-	return name != "" && !strings.HasPrefix(name, "BEES_") &&
-		(prefix == "" || !strings.HasPrefix(name, prefix)) && !isVCSEnv(name)
+	return name != "" && (prefix == "" || !strings.HasPrefix(name, prefix)) && !isVCSEnv(name)
 }
 
 func profileAgent(p Profile) string {

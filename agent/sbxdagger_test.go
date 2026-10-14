@@ -90,7 +90,7 @@ echo '{"type":"result","subtype":"success","result":"ok"}'
 `)
 	r := newRunner(t, claude)
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	dir, err := r.NewSessionDir("dagger")
 	if err != nil {
@@ -186,7 +186,7 @@ func TestSandboxWithoutDaggerInstallsNothing(t *testing.T) {
 	r := newRunner(t, fakeClaude(t, `env > "$TASK_SESSION_DIR/agent-env.txt"
 echo '{"type":"result","subtype":"success","result":"ok"}'`))
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	res, err := r.Run(context.Background(), Request{Name: "plain", Profile: Profile{Name: "builder", Sandbox: SandboxSbx}, Workspace: fakeWorkspace{dir: t.TempDir()}})
 	if err != nil || res.IsError {
@@ -208,7 +208,7 @@ func TestSandboxDaggerInstallFailure(t *testing.T) {
 	sock := echoEngine(t)
 	r := newRunner(t, fakeClaude(t, `touch "$TASK_SESSION_DIR/ran"`))
 	r.SbxBin = fakeSbx(t)
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	if err := os.WriteFile(filepath.Join(filepath.Dir(r.SbxBin), "fail-setup"), nil, 0o644); err != nil {
 		t.Fatal(err)

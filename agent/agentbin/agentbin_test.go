@@ -11,7 +11,7 @@ import (
 )
 
 // TestMain lets the test binary be re-executed as a command of its own, the
-// way a test of `bees run` that starts the real command would: with
+// way a caller's test that starts its real command would: with
 // AGENTBIN_CHILD set it resolves the agent named there and prints the
 // verdict instead of running the tests.
 func TestMain(m *testing.M) {

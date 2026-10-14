@@ -189,7 +189,7 @@ func TestAnAngleIsToldTheRulesThatNameIt(t *testing.T) {
 	}
 }
 
-// exactWords is a synthetic comparator, not busybees' overlap policy.
+// exactWords is a synthetic comparator, not a caller's overlap policy.
 func exactWords(a, b, c, d string) bool {
 	left := strings.Fields(strings.ToLower(a + " " + b))
 	right := strings.Fields(strings.ToLower(c + " " + d))

@@ -31,7 +31,7 @@ import (
 // openCodeToolScanMarker names the report openCodeToolScan prints, so that
 // output from anything else (an opencode that is no longer a Bun
 // executable and ignores BUN_BE_BUN) is not taken for one.
-const openCodeToolScanMarker = "bees-opencode-custom-tools/1"
+const openCodeToolScanMarker = "agentcore-opencode-custom-tools/1"
 
 // openCodeToolScan lists every entry that is not a directory in the tool/
 // and tools/ directories of each root, following links the way opencode's

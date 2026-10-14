@@ -62,7 +62,7 @@ func containerUseRunner(t *testing.T, claudeBody string) (*testRunner, Profile) 
 	fakeContainerHost(t, "darwin")
 	r := newRunner(t, fakeClaude(t, claudeBody))
 	r.DockerBin = fakeDocker(t, containerUseRepo+":*")
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	r.ContainerListen = "127.0.0.1:0"
 	role := Profile{Name: "builder", Model: "opus", MaxTurns: 5, Timeout: time.Minute,

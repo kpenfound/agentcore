@@ -167,7 +167,7 @@ func TestMarkInterrupted(t *testing.T) {
 
 // A codex transcript is its app-server's JSON-RPC connection, and the
 // "item/completed" notifications are its turns. Everything else on the
-// connection — bees' own requests and the server's responses to them, the
+// connection — the runner's own requests and the server's responses to them, the
 // server's own requests (answered in turn), delta notifications streamed
 // token by token, and the bookkeeping notifications around an item (its
 // start) and the turn (its start and end) — is not counted.
@@ -198,9 +198,9 @@ func TestCountTurnsReadsACodexTranscript(t *testing.T) {
 }
 
 // An opencode session carries no marker the process-table scan can match,
-// so `bees kill`'s search reaches it through its pid file alone. It must
-// leave that file where it is: CheckInterrupted reads the same file, and a
-// running session whose pid file the search deleted reads as interrupted.
+// so procs.Find reaches it through its pid file alone. It must leave that
+// file where it is: CheckInterrupted reads the same file, and a running
+// session whose pid file the search deleted reads as interrupted.
 func TestARunningUnmarkedAgentSurvivesTheSearchForOrphans(t *testing.T) {
 	sessions := t.TempDir()
 	dir := filepath.Join(sessions, "20260920-081500-developer-issue-5-r1-ab")

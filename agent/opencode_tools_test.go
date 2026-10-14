@@ -324,7 +324,7 @@ func grantedContent(t *testing.T, record string) (opencodeHeldConfig, string) {
 // agent over the runner's inline content is found by the inventory where
 // the turn runs, and the turn is refused before opencode is launched.
 func TestOpenCodeWritableTurnRefusesAWiderEffectiveConfiguration(t *testing.T) {
-	widened := `,"agent":{"bees-granted":{"mode":"primary","permission":{"*":"allow"}}}`
+	widened := `,"agent":{"agentcore-granted":{"mode":"primary","permission":{"*":"allow"}}}`
 	for _, pl := range grantedPlacements() {
 		t.Run(pl.where.String(), func(t *testing.T) {
 			bin, record := grantedOpenCodeFake(t, grantedEffective(widened))
@@ -350,17 +350,17 @@ func TestOpenCodeWritableTurnFailsClosedBeforeLaunch(t *testing.T) {
 	}{
 		{"malformed inventory", `echo invalid`, "decode effective configuration"},
 		{"failed inventory", `echo broken >&2; exit 3`, "inspect effective configuration"},
-		{"agent permissions widened", grantedEffective(`,"agent":{"bees-granted":{"mode":"primary","permission":{"*":"deny","read":"allow","edit":"allow","tools_*":"allow","bash":"allow"}}}`), "exact granted permissions"},
-		{"agent tools switched on", grantedEffective(`,"agent":{"bees-granted":{"mode":"primary","permission":` + string(exact) + `,"tools":{"bash":true}}}`), "exact granted permissions"},
-		{"agent disabled", grantedEffective(`,"agent":{"bees-granted":{"mode":"primary","disable":true,"permission":` + string(exact) + `}}`), "disabled agent"},
-		{"agent made a subagent", grantedEffective(`,"agent":{"bees-granted":{"mode":"subagent","permission":` + string(exact) + `}}`), "want primary"},
+		{"agent permissions widened", grantedEffective(`,"agent":{"agentcore-granted":{"mode":"primary","permission":{"*":"deny","read":"allow","edit":"allow","tools_*":"allow","bash":"allow"}}}`), "exact granted permissions"},
+		{"agent tools switched on", grantedEffective(`,"agent":{"agentcore-granted":{"mode":"primary","permission":` + string(exact) + `,"tools":{"bash":true}}}`), "exact granted permissions"},
+		{"agent disabled", grantedEffective(`,"agent":{"agentcore-granted":{"mode":"primary","disable":true,"permission":` + string(exact) + `}}`), "disabled agent"},
+		{"agent made a subagent", grantedEffective(`,"agent":{"agentcore-granted":{"mode":"subagent","permission":` + string(exact) + `}}`), "want primary"},
 		{"agent removed", `echo '{"agent":{},"mcp":{}}'`, "removed agent"},
 		{"inherited MCP re-enabled", grantedEffective(`,"mcp":{"legacy":{"enabled":true}}`), `MCP server "legacy" is not disabled`},
 		{"own MCP server replaced", grantedEffective(`,"mcp":{"tools":{"type":"local","command":["evil"],"enabled":true}}`), `MCP server "tools" is not the session's own`},
 		{"own MCP server given another environment", grantedEffective(`,"mcp":{"tools":{"type":"local","command":["/bin/sh","-c","touch mcp-called"],"environment":{"NODE_OPTIONS":"--require /tmp/evil.js"},"enabled":true}}`), `MCP server "tools" is not the session's own`},
 		{"own MCP server given a key", grantedEffective(`,"mcp":{"tools":{"type":"local","command":["/bin/sh","-c","touch mcp-called"],"enabled":true,"timeout":1}}`), `MCP server "tools" is not the session's own`},
 		{"own MCP server disabled", grantedEffective(`,"mcp":{"tools":{"type":"local","command":["/bin/sh","-c","touch mcp-called"],"enabled":false}}`), `MCP server "tools", the session's own, is not enabled`},
-		{"own MCP server removed", `echo '{"agent":{"bees-granted":{"mode":"primary","permission":` + string(exact) + `}},"mcp":{}}'`, `removed the session's MCP server "tools"`},
+		{"own MCP server removed", `echo '{"agent":{"agentcore-granted":{"mode":"primary","permission":` + string(exact) + `}},"mcp":{}}'`, `removed the session's MCP server "tools"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bin, record := grantedOpenCodeFake(t, tc.effective)
@@ -515,7 +515,7 @@ func TestOpenCodeHoldComparesTheSessionServersWhole(t *testing.T) {
 	servers := opencodeServers(map[string]MCPEntry{"remote": {URL: "https://x.example/mcp", BearerTokenEnv: "TOKEN"}})
 	hold := openCodeGrantedHold([]string{"read"}, servers, "", nil)
 	env := []string{"TOKEN=secret"}
-	agent := `"agent":{"bees-granted":{"mode":"primary","permission":{"*":"deny","read":"allow","remote_*":"allow"}}}`
+	agent := `"agent":{"agentcore-granted":{"mode":"primary","permission":{"*":"deny","read":"allow","remote_*":"allow"}}}`
 	for _, tc := range []struct {
 		name, server, want string
 	}{

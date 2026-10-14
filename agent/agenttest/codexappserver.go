@@ -13,13 +13,13 @@ import (
 
 // CodexAppServerFakeEnv set to "1" makes the running test binary a fake
 // `codex app-server` (RunCodexAppServer), the same way FAKE_CLAUDE makes it
-// a fake `claude` in internal/scheduler/scheduler_test.go: the name does
-// not start with BEES_, because the runner strips every inherited BEES_*
-// variable from a session, so a flag in that namespace would never reach
-// the fake. A test binary that wants to offer this fake, to its own tests
-// or to a session a production Runner starts, checks this variable first
-// in its TestMain and calls RunCodexAppServer when it is set, as this
-// package's own tests do.
+// a fake `claude` in a caller's tests: the name carries no caller's
+// Runner.EnvironmentPrefix, because the runner strips every inherited
+// variable with that prefix from a session, so a flag in that namespace
+// would never reach the fake. A test binary that wants to offer this
+// fake, to its own tests or to a session a production Runner starts,
+// checks this variable first in its TestMain and calls RunCodexAppServer
+// when it is set, as this package's own tests do.
 const CodexAppServerFakeEnv = "FAKE_CODEX_APP_SERVER"
 
 // codexAppServerDirEnv names the directory CodexAppServer wrote the fake's
@@ -128,8 +128,8 @@ type CodexAppServerScript struct {
 
 // CodexAppServer arranges for the running test binary, re-executed, to be a
 // fake `codex app-server` scripted by script, the way FAKE_CLAUDE and
-// Runner.ClaudeBin = os.Args[0] do for claude in busybees'
-// internal/scheduler/scheduler_test.go (see CONTRIBUTING.md): it sets
+// Runner.ClaudeBin = os.Args[0] do for claude in a caller's tests
+// (see CONTRIBUTING.md): it sets
 // CodexAppServerFakeEnv and the script's location for the rest of the
 // calling test (t.Setenv, undone when it ends) and returns the test
 // binary's own path, which the caller hands a Runner as CodexBin, or runs

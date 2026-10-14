@@ -106,7 +106,7 @@ var validTurnInput = []map[string]any{{"type": "text", "text": "TASK"}}
 // handshake drives the fake through initialize and config/read, common to
 // every conversation.
 func (c *codexConversation) handshake() {
-	c.send(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{"clientInfo": map[string]any{"name": "bees"}}})
+	c.send(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{"clientInfo": map[string]any{"name": "agentcore"}}})
 	if msg := c.recv(); msg["id"] != float64(1) || msg["result"] == nil {
 		c.t.Fatalf("initialize answer: %v", msg)
 	}
@@ -195,7 +195,7 @@ func TestCodexAppServerFullConversationWithoutConfigRead(t *testing.T) {
 	bin, _ := agenttest.CodexAppServer(t, script)
 	c := startCodex(t, bin, "app-server")
 
-	c.send(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{"clientInfo": map[string]any{"name": "bees"}}})
+	c.send(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{"clientInfo": map[string]any{"name": "agentcore"}}})
 	if msg := c.recv(); msg["id"] != float64(1) || msg["result"] == nil {
 		c.t.Fatalf("initialize answer: %v", msg)
 	}

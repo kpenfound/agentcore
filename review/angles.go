@@ -58,7 +58,7 @@ var angleTitles = map[string]string{
 }
 
 // Artifact paths shared by pipeline stages and their callers. CheckoutDir is
-// reserved for caller-acquired files; core does not create a checkout.
+// reserved for caller-acquired files; agentcore does not create a checkout.
 const (
 	AnglesDir   = "angles"
 	CheckoutDir = "checkout"
@@ -121,7 +121,7 @@ type Angles[R Reference] struct {
 	// callbacks must be safe for concurrent calls; nil retains Provider.
 	ProviderFor func(angle string) string
 	// Dir is an existing working directory, used when Prepare is nil.
-	// Core does not write the diff into this caller-owned directory.
+	// agentcore does not write the diff into this caller-owned directory.
 	// With no directory, sessions use a persistent scratch directory.
 	Dir string
 	// Log receives angle-selection diagnostics, and is silent when nil.

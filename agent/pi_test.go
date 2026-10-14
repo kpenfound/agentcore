@@ -194,9 +194,9 @@ printf '{"status":"submitted","work":{"key":"task/12","tags":{"ticket":"twelve"}
 // pi tools of their own.
 func TestPiMCPConfigContent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), PiMCPConfigFile)
-	err := writePiMCPConfig(path, map[string]MCPEntry{"bees": {
-		Command: "/usr/local/bin/bees", Args: []string{"mcp", "serve"},
-		Env: map[string]string{"BEES_ROLE": "developer", "BEES_SESSION_DIR": "/state/sessions/s1"},
+	err := writePiMCPConfig(path, map[string]MCPEntry{"tasks": {
+		Command: "/usr/local/bin/tasks", Args: []string{"mcp", "serve"},
+		Env: map[string]string{"TASK_ROLE": "developer", "TASK_SESSION_DIR": "/state/sessions/s1"},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -204,15 +204,15 @@ func TestPiMCPConfigContent(t *testing.T) {
 	b, _ := os.ReadFile(path)
 	want := `{
   "mcpServers": {
-    "bees": {
-      "command": "/usr/local/bin/bees",
+    "tasks": {
+      "command": "/usr/local/bin/tasks",
       "args": [
         "mcp",
         "serve"
       ],
       "env": {
-        "BEES_ROLE": "developer",
-        "BEES_SESSION_DIR": "/state/sessions/s1"
+        "TASK_ROLE": "developer",
+        "TASK_SESSION_DIR": "/state/sessions/s1"
       },
       "lifecycle": "eager",
       "directTools": true
@@ -431,7 +431,7 @@ echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"te
 	r := newRunner(t, "")
 	r.PiBin = bin
 	r.DockerBin = fakeDocker(t, "ghcr.io/acme/pi:1")
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	r.ContainerListen = "127.0.0.1:0"
 	role := piRole("openrouter/x")

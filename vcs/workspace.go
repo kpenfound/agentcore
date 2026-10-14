@@ -24,7 +24,7 @@ type Directory string
 func (d Directory) Directory() string { return string(d) }
 func (d Directory) VCS() *Access      { return nil }
 
-// Request selects a workspace. Ref and Branch are opaque to core: the provider
+// Request selects a workspace. Ref and Branch are opaque to agentcore: the provider
 // interprets them. An empty Branch asks for a workspace without a writable branch.
 type Request struct {
 	Name   string

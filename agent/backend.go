@@ -352,7 +352,7 @@ func (claudeBackend) consume(r *Runner, stdout io.Reader, transcript io.Writer, 
 // Every request the server sends is answered, none left pending
 // (codexConversation.answer): mcpServer/elicitation/request gets a result
 // with action "cancel", and every other request, known or unknown, a
-// JSON-RPC error saying it is not supported in a bees session.
+// JSON-RPC error saying it is not supported in an agentcore session.
 //
 // codexRPCRun reports the thread id, the agentMessage codex marked
 // final_answer (the last agent message when none is), the turn count and,
@@ -574,9 +574,9 @@ func makeSuccessEnd(sessionID, result string, turns int) *streamEnd {
 //     writable turn whose grants name built-in tools rather than ToolsAll.
 //     It starts a private primary agent (opencodeHold) whose exact
 //     effective permissions deny every tool but the held ones — read, grep
-//     and glob for RunRestricted's `bees-read-only`; the granted built-in
+//     and glob for RunRestricted's `agentcore-read-only`; the granted built-in
 //     tools (openCodeTools) and every tool of the session's own MCP
-//     servers for `bees-granted` — and runs with --pure so discovered
+//     servers for `agentcore-granted` — and runs with --pure so discovered
 //     plugins and their hooks cannot load. --pure does not stop opencode
 //     importing custom tools from its configuration directories, so the
 //     turn is refused when there is one (openCodeCustomTools). `opencode
@@ -642,10 +642,10 @@ const (
 	// source. The held agent repeats the same permissions because its
 	// rules take precedence over the global ones.
 	EnvOpenCodePermission   = "OPENCODE_PERMISSION"
-	openCodeRestrictedAgent = "bees-read-only"
+	openCodeRestrictedAgent = "agentcore-read-only"
 	// openCodeGrantedAgent is the primary agent a writable turn runs as
 	// when its grants name built-in tools rather than ToolsAll.
-	openCodeGrantedAgent = "bees-granted"
+	openCodeGrantedAgent = "agentcore-granted"
 )
 
 var openCodeRestrictedPermissions = map[string]string{

@@ -42,7 +42,7 @@ or scheduling policy: callers supply those.
   files and interruption inspection. `grants.go` is the capability contract every
   request carries (`Grants`: env allowlist, tools, ro/rw mounts, VCS; a grant naming built-in tools is held to them
   where the backend's `WritableTools` in `backends.go` declares the placement supported, opencode through its generated
-  `bees-granted` agent checked with `opencode debug config` where the turn runs (`probe.go`), after the search for the custom tools opencode would load that refuses any held opencode turn (`opencode_customtools.go`), codex through configuration derived from the grant and checked with `codex features list`, `codex mcp list` and the app server's `config/read` there (`codex_tools.go`), and refused elsewhere) and the
+  `agentcore-granted` agent checked with `opencode debug config` where the turn runs (`probe.go`), after the search for the custom tools opencode would load that refuses any held opencode turn (`opencode_customtools.go`), codex through configuration derived from the grant and checked with `codex features list`, `codex mcp list` and the app server's `config/read` there (`codex_tools.go`), and refused elsewhere) and the
   `Boundary` that verifies it before launch (`HostBoundary`, `ContainerBoundary`, and `SandboxBoundary` in `sbx.go`,
   the Docker Sandbox mode `sandbox = "sbx"`: `sbx create <agent>` with the binds as workspaces, `sbx exec` around the agent's
   command, `sbx rm` at the end, the agent's credential left to the sbx proxy; `sbxdagger.go`, the opt-in Dagger CLI and
@@ -96,7 +96,7 @@ or scheduling policy: callers supply those.
 - Nothing here imports a caller. Policy that belongs to one caller stays in
   that caller; this module takes it as a parameter or an interface.
 - A change that breaks callers' code or on-disk formats is called out in the
-  pull request and the release notes: busybees reads ledgers, review artifacts
+  pull request and the release notes: callers read ledgers, review artifacts
   and session directories written by earlier versions.
 
 ## Documentation

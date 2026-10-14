@@ -119,7 +119,7 @@ func (m *Manager) wrapPlugin(pluginDir, link, dest, name, raw string) (string, e
 	}
 	manifest := map[string]string{
 		"name":        name,
-		"description": "busybees skill from " + raw,
+		"description": "agentcore skill from " + raw,
 		"version":     "0.0.0",
 	}
 	data, _ := json.MarshalIndent(manifest, "", "  ")

@@ -104,8 +104,7 @@ func TestBackendCredentials(t *testing.T) {
 
 // TestBackendProviderEnv pins the provider environment every agent is
 // configured through: each list is what a session of that agent inherits
-// beyond the host environment (internal/session.ProviderEnv, granted to
-// the session by the busybees adapter).
+// beyond the host environment (a caller grants it to the session).
 func TestBackendProviderEnv(t *testing.T) {
 	want := map[string][]string{
 		AgentClaude:   {"ANTHROPIC_*", "CLAUDE_*", "AWS_*", "GOOGLE_*", "CLOUD_ML_REGION", "VERTEX_*", "DISABLE_*", "MAX_THINKING_TOKENS", "MCP_*"},

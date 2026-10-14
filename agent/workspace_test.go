@@ -87,7 +87,7 @@ func TestWorkspaceVCSMountPaths(t *testing.T) {
 }
 
 func TestWorkspaceAccessContract(t *testing.T) {
-	// Core does no git discovery (the caller's Workspace supplies VCS access):
+	// agentcore does no git discovery (the caller's Workspace supplies VCS access):
 	// a git it ran would leave a marker, even if its error were ignored.
 	gitDir := t.TempDir()
 	marker := filepath.Join(t.TempDir(), "git-called")
@@ -189,6 +189,6 @@ echo '{"type":"result","subtype":"success","result":"ok"}'`)}
 		}
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
-		t.Fatalf("core attempted git discovery: %v", err)
+		t.Fatalf("agentcore attempted git discovery: %v", err)
 	}
 }

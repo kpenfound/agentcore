@@ -14,7 +14,7 @@ import (
 
 // codexRPCClientInfo is the client half of codex app-server's initialize
 // handshake.
-var codexRPCClientInfo = map[string]any{"clientInfo": map[string]string{"name": "bees", "version": "0"}}
+var codexRPCClientInfo = map[string]any{"clientInfo": map[string]string{"name": "agentcore", "version": "0"}}
 
 // codexRPCTurn is what one codex app-server turn needs from its caller: the
 // turn's kind — Restricted and the built-in tools a held turn is granted,
@@ -68,7 +68,7 @@ type codexRPCParams struct {
 
 // codexRPCInputItem is one item of turn/start's params.input array. The
 // app-server protocol expects input as a sequence of typed items, not a
-// bare string; bees sends exactly one "text" item per turn, carrying the
+// bare string; the runner sends exactly one "text" item per turn, carrying the
 // turn's prompt verbatim.
 type codexRPCInputItem struct {
 	Type string `json:"type"`
@@ -132,11 +132,11 @@ func (l codexRPCLine) hasID() bool {
 }
 
 // codexUnsupportedRequest answers one request the app server sent: a
-// JSON-RPC error saying bees does not support it, whatever it asks, so
+// JSON-RPC error saying the runner does not support it, whatever it asks, so
 // none is ever left pending. answer special-cases
 // mcpServer/elicitation/request with a cancelling result instead.
 func codexUnsupportedRequest(method string) *codexRPCError {
-	return &codexRPCError{Code: -32601, Message: fmt.Sprintf("%s is not supported in a bees session", method)}
+	return &codexRPCError{Code: -32601, Message: fmt.Sprintf("%s is not supported in an agentcore session", method)}
 }
 
 // codexRateLimitWindow is one usage window ("primary" or "secondary") of
@@ -195,7 +195,7 @@ func (c *codexConversation) recordRateLimit(params json.RawMessage) {
 }
 
 // codexElicitationMethod is the one server request answered with a result
-// rather than an error: bees never approves anything, and the server
+// rather than an error: the runner never approves anything, and the server
 // expects either a cancel or a decline for this one, not an error.
 const codexElicitationMethod = "mcpServer/elicitation/request"
 
@@ -431,8 +431,8 @@ func (c *codexConversation) awaitTurnCompleted(stop <-chan struct{}) error {
 // this conversation learned from thread/start's and turn/start's own
 // answers. Its response, if the server ever sends one, carries no method
 // and matches no id this conversation awaits, so the loop above reads and
-// ignores it exactly as it does any other response to a request bees does
-// not correlate: what ends the turn is turn/completed, not this answer.
+// ignores it exactly as it does any other response to a request the runner
+// does not correlate: what ends the turn is turn/completed, not this answer.
 func (c *codexConversation) sendInterrupt() error {
 	id := c.nextID
 	c.nextID++

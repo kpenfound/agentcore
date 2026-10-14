@@ -30,10 +30,10 @@ func fakeDocker(t *testing.T, image string) string {
 	return agenttest.Docker(t, image, "TASK_SESSION_DIR")
 }
 
-// fakeBees stands in for the task binary a container session's built-in
+// fakeTaskServer stands in for the task binary a container session's built-in
 // server runs as: `mcp serve --listen` records its environment and its pid,
 // reports an address and waits to be killed.
-func fakeBees(t *testing.T) string { return agenttest.MCPServer(t, "TASK_SESSION_DIR") }
+func fakeTaskServer(t *testing.T) string { return agenttest.MCPServer(t, "TASK_SESSION_DIR") }
 
 // fakeWorkspace has no git layout and supplies metadata explicitly.
 type fakeWorkspace struct {
@@ -98,7 +98,7 @@ printf '{"status":"submitted","work":{"key":"task/7","tags":{"ticket":"seven"}}}
 	metadata, _ = filepath.EvalSymlinks(metadata)
 	r := newRunner(t, claude)
 	r.DockerBin = fakeDocker(t, "ghcr.io/acme/task:1")
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	r.ContainerListen = "127.0.0.1:0"
 	role := Profile{Name: "builder", Model: "opus", MaxTurns: 5, Timeout: time.Minute,
@@ -335,7 +335,7 @@ func TestStoppedContainerSessionIsRemoved(t *testing.T) {
 	claude := fakeClaude(t, `sleep 5`)
 	r := newRunner(t, claude)
 	r.DockerBin = fakeDocker(t, "img")
-	r.ServerBin = fakeBees(t)
+	r.ServerBin = fakeTaskServer(t)
 	r.StateDir = t.TempDir()
 	r.ContainerListen = "127.0.0.1:0"
 	role := Profile{Name: "auditor", Model: "opus", MaxTurns: 1, Timeout: 200 * time.Millisecond, Sandbox: SandboxContainer, SandboxImage: "img"}

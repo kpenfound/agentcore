@@ -14,8 +14,8 @@ import (
 // process-table scan finds the session by — together with the
 // implementation that builds that command line and reads what the CLI
 // printed. The lists these facts appear in derive from the
-// descriptors: AgentCredentials below, internal/session.ProviderEnv in
-// the busybees adapter, the executable every backend defaults to, and
+// descriptors: AgentCredentials below, the provider environment a
+// caller derives from them, the executable every backend defaults to, and
 // the backend backendFor selects. procs' executable list is the one that
 // cannot derive, because procs cannot import this package: it stays the
 // independent source, and a test holds the two together.
