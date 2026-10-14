@@ -65,6 +65,13 @@ or scheduling policy: callers supply those.
   starts no process.
 - `agent/procs` — PID files, process-table inspection and container cleanup.
   The caller supplies its command markers and container label.
+- `jev` — a `Judge` that asks Jev, TypeSafe's System One model, through
+  OpenRouter by default: `Settings` with one switch, the API key from the
+  environment, one retry of a transient failure, a shared cool-down and
+  `Status`; every failure is a fallback `Decision` with a `Reason`.
+  `jev/systemone` is the API client (typed questions, validated answers);
+  `jev/jevtest` scripts a provider for tests. The caller keeps what to ask,
+  answer thresholds and where costs and decisions are recorded.
 - `mcphost` — generic MCP server metadata, typed role-scoped registration,
   in-memory clients, stdio/HTTP lifecycle, per-turn endpoints (`lease.go`:
   `Start`/`StartOn` → `Endpoint` and `Lease`, `StartMemory` for tests) and

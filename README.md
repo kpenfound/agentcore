@@ -2,8 +2,8 @@
 
 `github.com/kpenfound/agentcore` runs headless coding-agent sessions and the
 pieces a factory built on them needs: the session runner and its execution
-boundary, an MCP host, a review pipeline, workspaces over git and jj, and
-operational primitives. [busybees](https://github.com/kpenfound/busybees) is
+boundary, an MCP host, a review pipeline, workspaces over git and jj,
+operational primitives and a client for Jev, TypeSafe's System One model. [busybees](https://github.com/kpenfound/busybees) is
 one consumer; its adapters supply the configuration, tracker mapping and
 policy this module leaves to the caller.
 
@@ -870,3 +870,47 @@ Artifacts keep `brief.json`, `angles/<angle>.json`, `findings.json` and
 caller owns interactive triage and publication. Progress callbacks run on the
 angle goroutines and must be concurrency-safe. Runs preserve reported session
 IDs, turns and costs; the brief preserves its session ID and cost.
+
+## Jev
+
+`jev/systemone` is a client for TypeSafe's System One API, and any endpoint
+compatible with it. A request is a state plus typed questions. A `Choice`
+picks one of the supplied options, a `Score` rates against levels listed
+lowest first, and a `Noul` is the probability that a proposition holds.
+`Client.Evaluate` refuses a request outside the API's limits before sending it,
+checks that every question got an answer in the shape its kind requires, and
+reports each failure as a `*systemone.Error` with a `Kind`. It does not retry.
+
+`jev.Judge` wraps the client for a service. `Settings` default to OpenRouter
+(`DefaultURL`, `DefaultModel` `~typesafe/jev-latest`, the key in
+`OPENROUTER_API_KEY`), with `Enabled` off. `Evaluate` returns a `Decision`
+and never an error. Use `Response` only when `Outcome` is `Accepted`. On a
+`Fallback`, `Reason` says why, and the caller takes the path it takes without
+Jev:
+
+```go
+j := &jev.Judge{Config: func() jev.Settings { return settings }}
+d := j.Evaluate(ctx, systemone.Request{
+	State: finalResponse,
+	Questions: map[string]systemone.Question{
+		"done": systemone.Noul("Does the agent claim the task is complete?"),
+	},
+})
+if d.Outcome == jev.Accepted && d.Response.Answers["done"].Noul > 0.9 {
+	// ...
+}
+```
+
+A disabled or nil Judge sends nothing. The Judge reads the key from the
+environment variable `APIKeyEnv` names on every call, retries a timeout or an
+unavailable provider once, and bounds each request by `Settings.Timeout`. A
+rate limit, or three transient failures without a success between them,
+starts a cool-down. While it lasts, every evaluation falls back with
+`cooling_down` without a request. The first cool-down is 30 seconds, it
+doubles each episode up to 15 minutes, and a success resets it. Share one Judge per service so every caller cools down
+together. `Status` reports the mode for a status page. Changed settings start
+with no cool-down.
+
+The caller decides what to ask, what thresholds make an answer usable, and
+where costs (`Response.Usage`) and decisions are recorded. `jev/jevtest` has a
+scripted `Provider` with `Factory` for `Judge.Provider`, and answer helpers.
