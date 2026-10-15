@@ -250,3 +250,29 @@ func TestClientDefaultsToTypeSafe(t *testing.T) {
 		t.Fatalf("url = %s", url)
 	}
 }
+
+func TestAnswersKeepTheirZeroValuesInJSON(t *testing.T) {
+	for _, tc := range []struct {
+		answer Answer
+		want   string
+	}{
+		{Answer{Kind: KindNoul}, `{"type":"noul","noul":0}`},
+		{Answer{Kind: KindScore, Probabilities: map[string]float64{"0": 1, "1": 0}},
+			`{"type":"score","score":0,"probabilities":{"0":1,"1":0},"confidence":0}`},
+		{Answer{Kind: KindChoice, Choice: "billing", Probabilities: map[string]float64{"billing": 0.5, "sales": 0.5}},
+			`{"type":"choice","choice":"billing","probabilities":{"billing":0.5,"sales":0.5},"confidence":0}`},
+	} {
+		data, err := json.Marshal(tc.answer)
+		if err != nil || string(data) != tc.want {
+			t.Fatalf("%s: marshal = %s, %v; want %s", tc.answer.Kind, data, err, tc.want)
+		}
+		var back Answer
+		if err := json.Unmarshal(data, &back); err != nil {
+			t.Fatalf("%s: unmarshal: %v", tc.answer.Kind, err)
+		}
+		again, _ := json.Marshal(back)
+		if string(again) != tc.want {
+			t.Fatalf("%s: round trip = %s", tc.answer.Kind, again)
+		}
+	}
+}

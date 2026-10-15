@@ -9,11 +9,11 @@ import (
 
 type wireAnswer struct {
 	Type          Kind               `json:"type"`
-	Choice        *string            `json:"choice"`
-	Score         *float64           `json:"score"`
-	Noul          *float64           `json:"noul"`
-	Probabilities map[string]float64 `json:"probabilities"`
-	Confidence    *float64           `json:"confidence"`
+	Choice        *string            `json:"choice,omitempty"`
+	Score         *float64           `json:"score,omitempty"`
+	Noul          *float64           `json:"noul,omitempty"`
+	Probabilities map[string]float64 `json:"probabilities,omitempty"`
+	Confidence    *float64           `json:"confidence,omitempty"`
 }
 
 type wireResponse struct {

@@ -5,6 +5,7 @@ package jevtest
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 
 	"github.com/kpenfound/agentcore/jev"
@@ -75,6 +76,16 @@ func Choice(choice string, p, confidence float64, others ...string) systemone.An
 		probabilities[o] = (1 - p) / float64(len(others))
 	}
 	return systemone.Answer{Kind: systemone.KindChoice, Choice: choice, Probabilities: probabilities, Confidence: confidence}
+}
+
+// Score is a Score answer at score with probabilities over the levels,
+// lowest first.
+func Score(score, confidence float64, probabilities ...float64) systemone.Answer {
+	levels := make(map[string]float64, len(probabilities))
+	for i, p := range probabilities {
+		levels[strconv.Itoa(i)] = p
+	}
+	return systemone.Answer{Kind: systemone.KindScore, Score: score, Probabilities: levels, Confidence: confidence}
 }
 
 // Noul is a Noul answer.

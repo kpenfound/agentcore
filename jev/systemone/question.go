@@ -201,13 +201,31 @@ func (r Request) Body(model string) ([]byte, error) {
 // decimal string, to its probability.
 type Answer struct {
 	Kind          Kind               `json:"type"`
-	Choice        string             `json:"choice,omitempty"`
-	Score         float64            `json:"score,omitempty"`
-	Noul          float64            `json:"noul,omitempty"`
-	Probabilities map[string]float64 `json:"probabilities,omitempty"`
+	Choice        string             `json:"choice"`
+	Score         float64            `json:"score"`
+	Noul          float64            `json:"noul"`
+	Probabilities map[string]float64 `json:"probabilities"`
 	// Confidence is derived from the answer's distribution by the API. It
 	// is not a verified probability of being correct.
-	Confidence float64 `json:"confidence,omitempty"`
+	Confidence float64 `json:"confidence"`
+}
+
+// MarshalJSON writes the fields a's kind carries, zero values included, so a
+// Score of 0 or a Noul of 0 reads back as given.
+func (a Answer) MarshalJSON() ([]byte, error) {
+	w := wireAnswer{Type: a.Kind}
+	switch a.Kind {
+	case KindChoice:
+		w.Choice = &a.Choice
+	case KindScore:
+		w.Score = &a.Score
+	case KindNoul:
+		w.Noul = &a.Noul
+	}
+	if a.Kind == KindChoice || a.Kind == KindScore {
+		w.Probabilities, w.Confidence = a.Probabilities, &a.Confidence
+	}
+	return json.Marshal(w)
 }
 
 // Usage is what one request consumed. CostKnown says the endpoint reported
