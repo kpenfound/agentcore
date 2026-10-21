@@ -66,7 +66,9 @@ or scheduling policy: callers supply those.
 - `agent/procs` — PID files, process-table inspection and container cleanup.
   The caller supplies its command markers and container label.
 - `jev` — a `Judge` that asks Jev, TypeSafe's System One model, through
-  OpenRouter by default: `Settings` with one switch, the API key from the
+  TypeSafe's own API by default. OpenRouter is an explicit alternative:
+  `jev.Settings{URL: "https://openrouter.ai/api", Model: "~typesafe/jev-latest", APIKeyEnv: "OPENROUTER_API_KEY", Timeout: jev.DefaultTimeout, Enabled: true}`.
+  `Settings` has one switch, the API key from the
   environment, one retry of a transient failure, a shared cool-down and
   `Status`; every failure is a fallback `Decision` with a `Reason`.
   `jev/systemone` is the API client (typed questions, validated answers);
