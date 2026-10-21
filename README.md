@@ -881,10 +881,21 @@ lowest first, and a `Noul` is the probability that a proposition holds.
 checks that every question got an answer in the shape its kind requires, and
 reports each failure as a `*systemone.Error` with a `Kind`. It does not retry.
 
-`jev.Judge` wraps the client for a service. `Settings` default to OpenRouter
-(`DefaultURL`, `DefaultModel` `~typesafe/jev-latest`, the key in
-`OPENROUTER_API_KEY`), with `Enabled` off. `Evaluate` returns a `Decision`
-and never an error. Use `Response` only when `Outcome` is `Accepted`. On a
+`jev.Judge` wraps the client for a service. `Settings` default to TypeSafe's
+own API (`https://api.typesafe.ai`, model `jev-latest`, the key in
+`TYPESAFE_API_KEY`), with `Enabled` off and a timeout of 10 seconds. Requests
+go to `<URL>/v1/systemone`. OpenRouter is an explicit alternative:
+
+```go
+settings := jev.DefaultSettings()
+settings.Enabled = true
+settings.URL = "https://openrouter.ai/api"
+settings.Model = "~typesafe/jev-latest"
+settings.APIKeyEnv = "OPENROUTER_API_KEY"
+```
+
+`Evaluate` returns a `Decision` and never an error. Use `Response` only when
+`Outcome` is `Accepted`. On a
 `Fallback`, `Reason` says why, and the caller takes the path it takes without
 Jev:
 
