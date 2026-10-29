@@ -1,7 +1,7 @@
 # Dagger workspace configuration
 
 [modules.go]
-source = "github.com/dagger/go@collections"
+source = "github.com/dagger/go"
 
 # The Go tests, linters and generators run in agentcore-dev's test runtime
 # (.dagger/modules/agentcore-dev): golang:1.26-bookworm with jj, which
