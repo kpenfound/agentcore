@@ -5,11 +5,12 @@
 ```
 agent/                         session runner, backends, sandbox and result artifacts
 agent/agentbin/                fake-executable guard
-agent/agenttest/               shared fake agents, Docker, sbx and host MCP server
-agent/agenttest/enforcertest/  an agent.Enforcer that starts no process
+agent/agenttest/               standalone scripted sessions, fake agents, Docker, sbx and host MCP server
+agent/agenttest/enforcertest/   an agent.Enforcer that starts no process
+agent/agenttest/sessiontest/   test-only session fixture and caller workflow checks without TestMain
 agent/procs/                   finding and stopping sessions (processes and containers)
 jev/                           Jev judge: settings, retry, cool-down and status around jev/systemone
-jev/jevtest/                   a scripted Jev provider for tests
+jev/jevtest/                   scripted Jev provider and loopback System One endpoint for tests
 jev/systemone/                 TypeSafe System One API client
 mcphost/                       MCP host, typed role-scoped registration, lifecycle and outcome tool
 ops/                           retry, ledger/budgets, pause/degraded signals, events, slots and wakes

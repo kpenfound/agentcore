@@ -715,6 +715,115 @@ parameters and tracker-specific artifacts stay in the caller's adapter.
 
 ## Testing
 
+Use `agenttest.Session` and `jevtest.NewServer` to test a caller's workflow
+through the real `agent.Runner` and `jev.Judge`. Describe session results in
+Go and point the runner at each fixture's `Bin`. Leave `Judge.Provider` nil
+and use the endpoint's `Settings` to exercise the HTTP client, retries and
+cool-down with a fake credential on loopback.
+
+This example queues accepted drafts for publication and sends a draft to
+manual review when Jev is unavailable. Routing and queues belong to the
+caller. Put the test in an external test package; import `agent`,
+`agent/agenttest`, `jev`, `jev/jevtest`, `jev/systemone` and `vcs` from this
+module, plus `context`, `slices`, `testing` and `time`:
+
+```go
+func TestDraftWorkflow(t *testing.T) {
+	claude := agenttest.Session(t, agent.AgentClaude,
+		agenttest.Turn{ResultText: "claude draft", SessionID: "claude-1"},
+	)
+	codex := agenttest.Session(t, agent.AgentCodex,
+		agenttest.Turn{ResultText: "codex draft", SessionID: "codex-1"},
+		agenttest.Turn{ResultText: "draft needing manual review", SessionID: "codex-2"},
+	)
+	accept := jevtest.Result{Response: systemone.Response{Model: "scripted-review", Answers: map[string]systemone.Answer{
+		"route": jevtest.Choice("publish", 0.9, 0.9, "review"),
+	}}}
+	endpoint := jevtest.NewServer(t, accept, accept,
+		jevtest.Result{Err: &systemone.Error{Kind: systemone.KindUnavailable}},
+	)
+	judge := &jev.Judge{Config: endpoint.Settings}
+	runner := &agent.Runner{ClaudeBin: claude.Bin, CodexBin: codex.Bin, SessionsDir: t.TempDir()}
+	workspace := t.TempDir()
+	var published, manualReview []string
+	run := func(backend string) {
+		t.Helper()
+		result, err := runner.Run(context.Background(), agent.Request{
+			Name: "draft", Prompt: "Write a draft", Workspace: vcs.Directory(workspace),
+			Profile: agent.Profile{Agent: backend, Timeout: 5 * time.Second, VCSAccess: true},
+			Grants: &agent.Grants{VCS: true, Tools: []string{agent.ToolsAll}, Mounts: []agent.Mount{
+				{Path: "/", Access: agent.ReadWrite},
+			}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.IsError {
+			t.Fatalf("agent failed: %s", result.ResultText)
+		}
+		decision := judge.Evaluate(context.Background(), systemone.Request{
+			State: result.ResultText,
+			Questions: map[string]systemone.Question{"route": systemone.Choice(
+				"Publish this draft or send it for review?",
+				systemone.Option{Name: "publish"}, systemone.Option{Name: "review"},
+			)},
+		})
+		if decision.Outcome == jev.Accepted && decision.Response.Answers["route"].Choice == "publish" {
+			published = append(published, result.ResultText)
+		} else {
+			manualReview = append(manualReview, result.ResultText)
+		}
+	}
+	run(agent.AgentClaude)
+	run(agent.AgentCodex)
+	run(agent.AgentCodex)
+	if !slices.Equal(published, []string{"claude draft", "codex draft"}) ||
+		!slices.Equal(manualReview, []string{"draft needing manual review"}) {
+		t.Fatalf("published = %q, manual review = %q", published, manualReview)
+	}
+	if claude.Record(t).Starts != 1 || codex.Record(t).Starts != 2 {
+		t.Fatal("expected one claude session and two codex sessions")
+	}
+	requests := endpoint.Requests()
+	wantStates := []string{"claude draft", "codex draft", "draft needing manual review", "draft needing manual review"}
+	if len(requests) != len(wantStates) {
+		t.Fatalf("Jev requests = %d, want %d (including one retry)", len(requests), len(wantStates))
+	}
+	for i, request := range requests {
+		if request.State != wantStates[i] {
+			t.Fatalf("Jev state %d = %v, want %q", i, request.State, wantStates[i])
+		}
+	}
+}
+```
+
+[TestCallerWorkflow](agent/agenttest/sessiontest/workflow_test.go) also scripts
+an agent failure and checks that the caller receives `Result.IsError`, with
+no Jev request for the failed draft.
+
+Session starts consume turns in order and repeat the last; probes consume
+none. `Record(t)` separates sessions and probes and exposes arguments,
+environment, working directory, prompt and resume id. `Turn` can write
+workspace files and an outcome, report failures or wait until stopped.
+The executable is standalone and needs no `TestMain` or fixture-specific
+environment grant. To test a separately started product, configure its
+executable path or put the fixture's `Dir` first on `PATH`.
+
+`NewServer` consumes one `jevtest.Result` per HTTP request, retries included,
+and repeats the last. `Requests()` records the model, decoded state, sorted
+question ids and whether a bearer credential was sent. It sets a
+fixture-owned environment variable for the fake key and closes at test
+cleanup; construct it outside parallel tests. Use `jevtest.Provider` when
+the test should replace the provider directly instead of exercising HTTP.
+
+These fixtures do not prove that a real CLI accepts the runner's flags or
+emits the stream format the runner expects. They do not simulate a model
+or call the caller's MCP tools; outcomes are written directly. The session
+fixtures do not cover opencode, pi or real kernel confinement
+(`Profile.Confine`, `NewHostNone`, `NewHostClaude`). Use `enforcertest` for
+caller code built around an `Enforcer`; kernel enforcement needs the checks
+described in [CONTRIBUTING.md](CONTRIBUTING.md#testing-rules).
+
 `agenttest` provides fake executable scripts for agents, Docker and a host MCP
 server. `agentbin` refuses real agent and engine executables from test binaries.
 The container fake records commands and simulates lifecycle operations without

@@ -1,5 +1,5 @@
-// Package jevtest supplies a fake Jev provider for tests. No test reaches a
-// real model.
+// Package jevtest supplies a fake Jev provider and a loopback System One
+// endpoint for tests. No test reaches a real model.
 package jevtest
 
 import (
