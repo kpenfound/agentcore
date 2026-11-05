@@ -6,13 +6,17 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/kpenfound/agentcore/jev/systemone"
 )
 
-// The defaults reach Jev through OpenRouter's TypeSafe-compatible API.
+// The defaults reach Jev through TypeSafe's own API. OpenRouter is an explicit
+// alternative: URL "https://openrouter.ai/api", Model "~typesafe/jev-latest",
+// APIKeyEnv "OPENROUTER_API_KEY".
 const (
-	DefaultURL       = "https://openrouter.ai/api"
-	DefaultModel     = "~typesafe/jev-latest"
-	DefaultAPIKeyEnv = "OPENROUTER_API_KEY"
+	DefaultURL       = systemone.DefaultBaseURL
+	DefaultModel     = "jev-latest"
+	DefaultAPIKeyEnv = "TYPESAFE_API_KEY"
 	DefaultTimeout   = 10 * time.Second
 )
 
@@ -25,6 +29,9 @@ var environmentName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // Settings say whether a Judge asks Jev and how it reaches Jev. Enabled is the
 // one switch for every evaluation a Judge serves. The API key is the name of
 // an environment variable; its value never becomes a setting or a record.
+// DefaultSettings selects TypeSafe's own API. To select OpenRouter explicitly,
+// set URL to "https://openrouter.ai/api", Model to "~typesafe/jev-latest" and
+// APIKeyEnv to "OPENROUTER_API_KEY".
 type Settings struct {
 	Enabled bool
 	// URL is the base of a TypeSafe-compatible API; requests go to
@@ -36,7 +43,7 @@ type Settings struct {
 	Timeout time.Duration
 }
 
-// DefaultSettings are disabled settings with every other field at its default.
+// DefaultSettings returns disabled settings for TypeSafe's own API.
 func DefaultSettings() Settings {
 	return Settings{URL: DefaultURL, Model: DefaultModel, APIKeyEnv: DefaultAPIKeyEnv, Timeout: DefaultTimeout}
 }

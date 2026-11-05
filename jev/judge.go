@@ -1,5 +1,7 @@
 // Package jev asks Jev, TypeSafe's System One model, typed questions through
-// a Provider, by default OpenRouter's TypeSafe-compatible API. A Judge adds
+// a Provider, by default TypeSafe's own API. OpenRouter is an explicit
+// alternative: set Settings.URL to "https://openrouter.ai/api", Model to
+// "~typesafe/jev-latest" and APIKeyEnv to "OPENROUTER_API_KEY". A Judge adds
 // what a service needs around the API client in jev/systemone: one switch,
 // the API key from the environment, a retry of transient failures, a
 // cool-down that keeps an outage from becoming a retry storm, and a status.
