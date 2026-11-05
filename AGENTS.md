@@ -61,8 +61,10 @@ or scheduling policy: callers supply those.
   the executable it runs, and the guard that keeps a test binary from running a
   real one.
 - `agent/agenttest` — fake agents, Docker, sbx and a host MCP server for tests,
-  here and in callers. `agent/agenttest/enforcertest` is an `Enforcer` that
-  starts no process.
+  here and in callers, including standalone scripted claude and codex sessions.
+  `agent/agenttest/enforcertest` is an `Enforcer` that starts no process.
+  `agent/agenttest/sessiontest` is a test-only package that exercises the
+  session fixtures and caller workflow without `TestMain`.
 - `agent/procs` — PID files, process-table inspection and container cleanup.
   The caller supplies its command markers and container label.
 - `jev` — a `Judge` that asks Jev, TypeSafe's System One model, through
@@ -70,8 +72,9 @@ or scheduling policy: callers supply those.
   environment, one retry of a transient failure, a shared cool-down and
   `Status`; every failure is a fallback `Decision` with a `Reason`.
   `jev/systemone` is the API client (typed questions, validated answers);
-  `jev/jevtest` scripts a provider for tests. The caller keeps what to ask,
-  answer thresholds and where costs and decisions are recorded.
+  `jev/jevtest` scripts a provider or a loopback System One endpoint for tests.
+  The caller keeps what to ask, answer thresholds and where costs and decisions
+  are recorded.
 - `mcphost` — generic MCP server metadata, typed role-scoped registration,
   in-memory clients, stdio/HTTP lifecycle, per-turn endpoints (`lease.go`:
   `Start`/`StartOn` → `Endpoint` and `Lease`, `StartMemory` for tests) and
