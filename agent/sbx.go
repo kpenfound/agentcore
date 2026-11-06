@@ -208,7 +208,7 @@ func (s *sandbox) create(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	args := []string{"create", "--quiet", "--name", s.name, "--skills", "off"}
+	args := []string{"create", "--no-progress", "--name", s.name, "--skills", "off"}
 	if s.image != "" {
 		args = append(args, "--template", s.image)
 	}

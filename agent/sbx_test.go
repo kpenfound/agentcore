@@ -68,7 +68,7 @@ printf '{"status":"submitted","work":{"key":"task/7","tags":{"ticket":"seven"}}}
 	// two differ, from the profile's template and without the shared
 	// skills store; sbx's name rules are met.
 	create := lines(t, filepath.Join(engine, "sbx-create.txt"))
-	if len(create) < 7 || strings.Join(create[:2], " ") != "create --quiet" || create[2] != "--name" || create[4] != "--skills" || create[5] != "off" || create[6] != "--template" || create[7] != "ghcr.io/acme/task:1" || create[8] != "claude" {
+	if len(create) < 7 || strings.Join(create[:2], " ") != "create --no-progress" || create[2] != "--name" || create[4] != "--skills" || create[5] != "off" || create[6] != "--template" || create[7] != "ghcr.io/acme/task:1" || create[8] != "claude" {
 		t.Fatalf("sbx create args: %v", create)
 	}
 	name := create[3]
@@ -193,7 +193,7 @@ printf '{"status":"submitted","work":{"key":"task/7","tags":{"ticket":"seven"}}}
 	if got := lines(t, filepath.Join(engine, "sbx-policy.txt")); !slices.Equal(got, wantPolicy) {
 		t.Errorf("sbx policy calls:\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(wantPolicy, "\n"))
 	}
-	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --quiet", "policy allow", "policy rm", "rm --force"}; !slices.Equal(got, want) {
+	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --no-progress", "policy allow", "policy rm", "rm --force"}; !slices.Equal(got, want) {
 		t.Errorf("sbx calls in order: %v, want %v", got, want)
 	}
 	// The command inside is the ordinary one, with the prompt on stdin.
@@ -292,7 +292,7 @@ func TestSandboxWorkingDirectoryInsideReadOnlyInputs(t *testing.T) {
 	engine := filepath.Dir(r.SbxBin)
 
 	// The working directory first is what sbx cannot start.
-	out, err := exec.Command(r.SbxBin, "create", "--quiet", "--name", "direct", "claude", work, inputs+":ro").CombinedOutput()
+	out, err := exec.Command(r.SbxBin, "create", "--no-progress", "--name", "direct", "claude", work, inputs+":ro").CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "500 Internal Server Error") {
 		t.Fatalf("the fake sbx started a sandbox whose primary workspace's parent is read-only: %v: %s", err, out)
 	}
@@ -430,7 +430,7 @@ func TestSandboxStartFailureRemovesTheSandbox(t *testing.T) {
 	if _, err := os.Stat(primary); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the primary workspace %s outlived the failed create: %v", primary, err)
 	}
-	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --quiet", "rm --force"}; !slices.Equal(got, want) {
+	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --no-progress", "rm --force"}; !slices.Equal(got, want) {
 		t.Errorf("sbx calls in order: %v, want %v", got, want)
 	}
 	if rm := strings.Join(lines(t, filepath.Join(engine, "sbx-rm.txt")), " "); rm != "rm --force "+name {
@@ -735,7 +735,7 @@ func TestStoppedSandboxSessionIsRemoved(t *testing.T) {
 	if len(rm) != 3 || !strings.HasPrefix(strings.Join(rm, " "), "rm --force task-slow-") {
 		t.Errorf("sandbox not removed exactly once: %v", rm)
 	}
-	if got, want := lines(t, filepath.Join(filepath.Dir(r.SbxBin), "sbx-calls.txt")), []string{"create --quiet", "policy allow", "policy rm", "rm --force"}; !slices.Equal(got, want) {
+	if got, want := lines(t, filepath.Join(filepath.Dir(r.SbxBin), "sbx-calls.txt")), []string{"create --no-progress", "policy allow", "policy rm", "rm --force"}; !slices.Equal(got, want) {
 		t.Errorf("sbx calls in order: %v, want the rule removed once, before the sandbox", got)
 	}
 }
@@ -778,7 +778,7 @@ func TestSandboxPolicyFailureStopsTheSession(t *testing.T) {
 	if syscall.Kill(pid, 0) == nil {
 		t.Errorf("the built-in server (pid %d) outlived the refused rule", pid)
 	}
-	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --quiet", "policy allow", "rm --force"}; !slices.Equal(got, want) {
+	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --no-progress", "policy allow", "rm --force"}; !slices.Equal(got, want) {
 		t.Errorf("sbx calls in order: %v, want %v", got, want)
 	}
 }
@@ -806,7 +806,7 @@ func TestSandboxCreateFailureStartsNothing(t *testing.T) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}
 	}
-	if got, want := lines(t, filepath.Join(filepath.Dir(r.SbxBin), "sbx-calls.txt")), []string{"create --quiet", "rm --force"}; !slices.Equal(got, want) {
+	if got, want := lines(t, filepath.Join(filepath.Dir(r.SbxBin), "sbx-calls.txt")), []string{"create --no-progress", "rm --force"}; !slices.Equal(got, want) {
 		t.Errorf("sbx calls in order: %v, want %v", got, want)
 	}
 	for _, left := range []string{filepath.Join(dir, "server-pid.txt"), filepath.Join(dir, procs.SandboxNameFile)} {

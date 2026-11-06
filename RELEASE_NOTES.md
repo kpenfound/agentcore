@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Sandbox sessions create their sandbox with `sbx create --no-progress`. Docker
+Sandboxes v0.50 removed `--quiet`, so earlier releases fail every `sbx`
+session's create on it.
+
 Jev judge defaults use TypeSafe's own API at `https://api.typesafe.ai`, model
 `jev-latest`, and the key variable `TYPESAFE_API_KEY`, with a 10-second timeout.
 

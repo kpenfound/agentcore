@@ -152,7 +152,7 @@ func TestSandboxReachesGrantedHostServers(t *testing.T) {
 	if got := lines(t, filepath.Join(engine, "sbx-policy.txt")); !slices.Equal(got, wantPolicy) {
 		t.Errorf("sbx policy calls:\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(wantPolicy, "\n"))
 	}
-	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --quiet", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}; !slices.Equal(got, want) {
+	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --no-progress", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}; !slices.Equal(got, want) {
 		t.Errorf("sbx calls in order: %v, want %v", got, want)
 	}
 
@@ -250,12 +250,12 @@ exit 1`
 		calls  []string
 		logged string
 	}{
-		"success":         {stream: claudeResult, ok: true, calls: []string{"create --quiet", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}},
-		"agent failure":   {stream: failing, calls: []string{"create --quiet", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}},
-		"probe failure":   {agent: AgentCodex, calls: []string{"create --quiet", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}},
-		"rule refused":    {stream: claudeResult, file: "fail-policy", calls: []string{"create --quiet", "policy allow", "rm --force"}},
-		"cancelled":       {stream: "sleep 30", cancel: true, calls: []string{"create --quiet", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}},
-		"removal refused": {stream: claudeResult, file: "fail-policy-rm", ok: true, calls: []string{"create --quiet", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}, logged: "policy store is locked"},
+		"success":         {stream: claudeResult, ok: true, calls: []string{"create --no-progress", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}},
+		"agent failure":   {stream: failing, calls: []string{"create --no-progress", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}},
+		"probe failure":   {agent: AgentCodex, calls: []string{"create --no-progress", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}},
+		"rule refused":    {stream: claudeResult, file: "fail-policy", calls: []string{"create --no-progress", "policy allow", "rm --force"}},
+		"cancelled":       {stream: "sleep 30", cancel: true, calls: []string{"create --no-progress", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}},
+		"removal refused": {stream: claudeResult, file: "fail-policy-rm", ok: true, calls: []string{"create --no-progress", "policy allow", "policy allow", "policy rm", "policy rm", "rm --force"}, logged: "policy store is locked"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			sbx := agenttest.Sbx(t, "RUN_DIR")
