@@ -72,6 +72,16 @@ type Profile struct {
 	// template a SandboxSbx session is created from (empty selects the
 	// sbx CLI's own template for the agent, SbxTemplates).
 	SandboxImage string
+	// SandboxCPUs is the number of virtual CPUs a SandboxSbx session's
+	// sandbox is created with (`sbx create --cpus`). Zero leaves it to sbx.
+	// Only SandboxSbx takes it, and a fallback profile carries its own.
+	SandboxCPUs int
+	// SandboxMemory is the memory limit a SandboxSbx session's sandbox is
+	// created with (`sbx create --memory`): a positive integer and the unit
+	// "m" or "g", such as "512m" or "4g". Empty leaves it to sbx, which
+	// enforces its own limits. Only SandboxSbx takes it, and a fallback
+	// profile carries its own.
+	SandboxMemory string
 	// Dagger gives a SandboxSbx session the Dagger CLI and a host's Dagger
 	// engine to run it against; nil is neither. The session must also be
 	// granted the engine (Grants.DaggerEngine).
@@ -110,6 +120,22 @@ func (p Profile) Validate() error {
 	if p.Sandbox == SandboxSbx && p.ContainerUseEnvironment != "" {
 		return fmt.Errorf("sandbox %q takes a template through sandbox_image, not a container_use_environment", p.Sandbox)
 	}
+	if p.SandboxCPUs != 0 {
+		if p.Sandbox != SandboxSbx {
+			return fmt.Errorf("SandboxCPUs is given to a session in sandbox %q only, not %q", SandboxSbx, p.Sandbox)
+		}
+		if err := CheckSandboxCPUs(p.SandboxCPUs); err != nil {
+			return err
+		}
+	}
+	if p.SandboxMemory != "" {
+		if p.Sandbox != SandboxSbx {
+			return fmt.Errorf("SandboxMemory is given to a session in sandbox %q only, not %q", SandboxSbx, p.Sandbox)
+		}
+		if err := CheckSandboxMemory(p.SandboxMemory); err != nil {
+			return err
+		}
+	}
 	if p.Dagger != nil {
 		if p.Sandbox != SandboxSbx {
 			return fmt.Errorf("the Dagger engine is given to a session in sandbox %q only, not %q", SandboxSbx, p.Sandbox)
@@ -145,6 +171,30 @@ type Dagger struct {
 	// Version is the Dagger CLI release installed in the sandbox, the
 	// engine's own: "v0.20.5" or "0.20.5".
 	Version string
+}
+
+// sandboxMemory is a memory limit as `sbx create --memory` takes one: a
+// positive integer and a binary unit.
+var sandboxMemory = regexp.MustCompile(`^[1-9][0-9]*[mg]$`)
+
+// CheckSandboxCPUs reports whether a count is one a sandbox can be created
+// with: zero (unset) or a positive integer. sbx enforces its own limits.
+func CheckSandboxCPUs(cpus int) error {
+	if cpus < 0 {
+		return fmt.Errorf("SandboxCPUs %d must be a positive number of CPUs, or 0 to leave it to sbx", cpus)
+	}
+	return nil
+}
+
+// CheckSandboxMemory reports whether a memory limit is one a sandbox can be
+// created with: empty (unset), or a positive integer followed by "m" or "g",
+// such as "512m" or "4g". Nothing else passes, so a value is one safe
+// command-line argument. sbx enforces its own limits.
+func CheckSandboxMemory(memory string) error {
+	if memory != "" && !sandboxMemory.MatchString(memory) {
+		return fmt.Errorf("SandboxMemory %q must be a positive integer and the unit m or g, such as 512m or 4g", memory)
+	}
+	return nil
 }
 
 // containerName is a name Docker accepts for a container.

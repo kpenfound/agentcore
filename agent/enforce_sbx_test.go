@@ -398,7 +398,7 @@ func TestASandboxSessionCleansUpACancelledTurn(t *testing.T) {
 	if res, err := s.Run(ctx, l.turn("http://127.0.0.1:8080/mcp")); err == nil {
 		t.Fatalf("the cancelled turn: %+v", res)
 	}
-	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --quiet", "policy allow", "policy rm", "rm --force"}; !slices.Equal(got, want) {
+	if got, want := lines(t, filepath.Join(engine, "sbx-calls.txt")), []string{"create --no-progress", "policy allow", "policy rm", "rm --force"}; !slices.Equal(got, want) {
 		t.Errorf("sbx calls in order: %v, want %v", got, want)
 	}
 	if procs.SandboxName(l.session) != "" {

@@ -119,7 +119,7 @@ exec sleep 60
 // sbx-create.txt beside the script and fails when a file named fail-create
 // is there, fails as sbx's start does after it has made the sandbox (a bare
 // HTTP 500) when one named fail-start is, refuses a flag other than
-// --no-progress, --name, --skills and --template the way sbx refuses an
+// --no-progress, --name, --skills, --template, --cpus and --memory the way sbx refuses an
 // unknown one, and fails the way sbx does when its primary workspace, the
 // first one, is read-only, is not a directory, or has a parent at or inside
 // a read-only workspace, where sbx's start writes the agent's instructions; `exec --interactive`, the session's command, records its
@@ -178,7 +178,7 @@ create)
   while [ $# -gt 0 ]; do
     case "$1" in
     --no-progress) shift ;;
-    --name|--skills|--template) shift 2 ;;
+    --name|--skills|--template|--cpus|--memory) shift 2 ;;
     -*)
       echo "Error: unknown flag: $1" >&2
       exit 1

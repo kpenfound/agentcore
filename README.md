@@ -440,6 +440,32 @@ port on `127.0.0.1` for the session's lifetime, and sets
 for a socket or a loopback TCP engine, and as written for a TCP engine on
 any other host. `NewSbx` prepares this kind (below).
 
+`Profile.SandboxCPUs` and `Profile.SandboxMemory` size a `sandbox = "sbx"`
+session's sandbox. `SandboxCPUs` is a positive number of CPUs and becomes
+`sbx create --cpus <n>`; `SandboxMemory` is a positive integer and the unit
+`m` or `g` (`512m`, `4g`) and becomes `--memory <value>`. Both go among the
+create options, before the agent's name, and each appears only when its own
+setting is set. Zero and empty are unset: the create command line is the same
+as without the fields, and sbx picks the sizing. agentcore sets no default and
+makes no comparison with the host; sbx enforces its own limits (such as the
+512 MiB memory minimum) and its create error is returned as any failed create's
+is. `Profile.Validate` refuses a negative `SandboxCPUs`, a `SandboxMemory`
+that is not a positive integer and `m` or `g`, and either setting on any other
+sandbox, with an error naming the field, so a refused profile runs no `sbx`
+command: not through `Runner.Run`, and not through a `NewSbx` turn, which is
+refused when it runs, after `Prepare`. `CheckSandboxCPUs` and
+`CheckSandboxMemory` apply the format checks for a caller that checks its
+configuration early. Choosing a `Fallback` profile stays the caller's: each
+profile in a chain carries its own `SandboxCPUs` and `SandboxMemory`, the
+caller that runs a fallback profile creates its sandbox with those values
+alone, and `Validate` checks a profile's own values, not its fallbacks':
+
+```go
+primary := agent.Profile{Name: "builder", Sandbox: agent.SandboxSbx, SandboxCPUs: 4, SandboxMemory: "8g"}
+primary.Fallback = &agent.Profile{Name: "builder-fallback", Sandbox: agent.SandboxSbx, SandboxCPUs: 2, SandboxMemory: "4g"}
+// Running *primary.Fallback creates its sandbox with --cpus 2 --memory 4g.
+```
+
 The sandbox reaches the host's loopback as `host.docker.internal`, and the
 sbx network policy denies it. The runner allows the sandbox, and no other,
 each host port the session needs with `sbx policy allow network --sandbox
