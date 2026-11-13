@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+`Mount.EmptyRepository` (a `bool`, false by default) marks a writable mount
+whose top holds an empty git repository, as `git init --quiet --template=`
+leaves it. A `sandbox = "sbx"` session admits a marked mount without
+`Grants.VCS`; every other sandbox refuses it with `ErrUnsupported`. The
+repository is checked at `Prepare` and before every turn, and one that holds
+objects, refs, `packed-refs`, hooks, a symbolic link, or a remote, include or
+`core.hooksPath` in its config is refused with `ErrNotGranted`. VCS stays
+denied to the turn. The mark shows on the mount in `Policy().Mounts` and
+counts in the comparison of a session's grants and of each turn's mounts with
+its policy. A `Mount` marshalled to JSON without the mark has the same form
+as before.
+
 `Profile.SandboxCPUs` (an `int`) and `Profile.SandboxMemory` (a string such as
 `512m` or `4g`) size the sandbox of a `sandbox = "sbx"` session. When set, they
 reach `sbx create` as `--cpus <n>` and `--memory <value>`, for `Runner.Run`

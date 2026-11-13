@@ -26,6 +26,14 @@ const ToolsAll = "*"
 type Mount struct {
 	Path   string
 	Access Access
+	// EmptyRepository marks a mount whose top holds a git repository as
+	// "git init --quiet --template=" leaves it, with no objects, refs or
+	// hooks (emptyRepository). A marked mount is admitted writable without
+	// VCS, in SandboxSbx alone; every other sandbox refuses it with
+	// ErrUnsupported. The mark is checked whenever a turn is verified, and
+	// a mount that no longer matches it is refused with ErrNotGranted. It
+	// grants nothing else of version control.
+	EmptyRepository bool `json:",omitempty"`
 }
 
 // Grants are the complete capabilities of one session. Whatever they do not
@@ -352,7 +360,7 @@ func verifyCommonFor(req Request, restricted bool) (*Turn, error) {
 		}
 	}
 
-	if turn.Mounts, err = resolveMounts(g, turn.VCS); err != nil {
+	if turn.Mounts, err = resolveMounts(g, turn.VCS, p.Sandbox); err != nil {
 		return nil, err
 	}
 	dir := req.workDir()
@@ -449,8 +457,8 @@ func checkEnvGrants(g *Grants) error {
 
 // resolveMounts checks the mounts on their own and returns them with their
 // symbolic links resolved, in the order they were granted. vcs is whether
-// the turn has version control.
-func resolveMounts(g *Grants, vcs bool) ([]Mount, error) {
+// the turn has version control, and sandbox the kind it runs in.
+func resolveMounts(g *Grants, vcs bool, sandbox string) ([]Mount, error) {
 	var within string
 	var err error
 	if g.Within != "" {
@@ -470,12 +478,19 @@ func resolveMounts(g *Grants, vcs bool) ([]Mount, error) {
 		if within != "" && !inside(within, resolved) {
 			return nil, fmt.Errorf("%w: mount %s resolves to %s, outside %s", ErrNotGranted, m.Path, resolved, g.Within)
 		}
-		if m.Access == ReadWrite && !vcs {
+		switch {
+		case m.EmptyRepository && sandbox != SandboxSbx:
+			return nil, fmt.Errorf("%w: mount %s is marked an empty repository, which only sandbox %q admits", ErrUnsupported, m.Path, SandboxSbx)
+		case m.EmptyRepository:
+			if err := emptyRepository(resolved); err != nil {
+				return nil, fmt.Errorf("%w: mount %s is marked an empty repository: %v", ErrNotGranted, m.Path, err)
+			}
+		case m.Access == ReadWrite && !vcs:
 			if meta, ok := vcsMetadata(resolved); ok {
 				return nil, fmt.Errorf("%w: mount %s is writable and holds VCS metadata %s", ErrNotGranted, m.Path, meta)
 			}
 		}
-		mounts = append(mounts, Mount{Path: resolved, Access: m.Access})
+		mounts = append(mounts, Mount{Path: resolved, Access: m.Access, EmptyRepository: m.EmptyRepository})
 	}
 	return mounts, nil
 }

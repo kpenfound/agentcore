@@ -183,7 +183,7 @@ func NewPolicy(sandbox string, g Grants) (Policy, error) {
 			return Policy{}, err
 		}
 	}
-	mounts, err := resolveMounts(&g, g.VCS)
+	mounts, err := resolveMounts(&g, g.VCS, kind)
 	if err != nil {
 		return Policy{}, err
 	}

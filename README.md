@@ -180,6 +180,27 @@ req.Grants = &agent.Grants{
   judged after their symbolic links are resolved; `Within` confines them all.
   The working directory must lie inside one. Without `VCS`, a writable mount
   inside or holding `.git`, `.hg`, `.jj` or `.svn` is refused.
+- `Mount.EmptyRepository` marks a mount whose top holds a git repository as
+  `git init --quiet --template=` leaves it. A `SandboxSbx` session admits a
+  marked mount writable without `VCS`; every other sandbox refuses it with
+  `ErrUnsupported`. The mark is checked whenever a turn is verified, at
+  `Prepare` and on every `Run`, and a mount that no longer matches it is
+  refused with `ErrNotGranted`. A matching mount holds `.git` as a directory,
+  not a file or a symbolic link, with nothing in it but:
+  - `HEAD`, naming a branch (`ref: refs/heads/<name>`);
+  - `config`, with no `[remote]`, `[include]` or `[includeIf]` section and
+    no `core.hooksPath`;
+  - `objects` and `refs`, holding directories alone: no objects and no refs.
+
+  So `packed-refs`, `hooks`, an index, `reftable` and any symbolic link are
+  refused, and so are `.hg`, `.jj` or `.svn` beside `.git` and a mount inside
+  `.git`. The mark grants nothing else of version control: without `VCS`,
+  the turn's and the policy's `VCS` stay false, the VCS executables stay
+  shadowed and VCS variables stay out of its environment. It shows on the mount in `Policy().Mounts`.
+
+  ```go
+  agent.Mount{Path: repo, Access: agent.ReadWrite, EmptyRepository: true}
+  ```
 - `VCS` grants version control. Without it, a host session finds `gh`, `git`,
   `hg`, `jj` and `svn` shadowed on `PATH` by stand-ins that exit 126, and
   Claude's sandbox settings deny them.
