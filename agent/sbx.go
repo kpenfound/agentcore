@@ -212,6 +212,12 @@ func (s *sandbox) create(ctx context.Context) (err error) {
 	if s.image != "" {
 		args = append(args, "--template", s.image)
 	}
+	if s.req.Profile.SandboxCPUs > 0 {
+		args = append(args, "--cpus", strconv.Itoa(s.req.Profile.SandboxCPUs))
+	}
+	if s.req.Profile.SandboxMemory != "" {
+		args = append(args, "--memory", s.req.Profile.SandboxMemory)
+	}
 	agent := s.req.Profile.Agent
 	if agent == "" {
 		agent = AgentClaude

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+`Profile.SandboxCPUs` (an `int`) and `Profile.SandboxMemory` (a string such as
+`512m` or `4g`) size the sandbox of a `sandbox = "sbx"` session. When set, they
+reach `sbx create` as `--cpus <n>` and `--memory <value>`, for `Runner.Run`
+sessions and `NewSbx` turns. Unset (zero, empty) leaves sizing to sbx, with the
+same `sbx create` arguments as before. `Profile.Validate` refuses a negative
+count, a memory value that is not a positive integer and `m` or `g`, and
+either setting on a sandbox other than `sbx`; the error names the field, and a
+refused profile runs no `sbx` command. Each `Fallback` profile carries its own
+values, applied when a caller runs it. `CheckSandboxCPUs` and
+`CheckSandboxMemory` expose the format checks.
+
 Sandbox sessions create their sandbox with `sbx create --no-progress`. Docker
 Sandboxes v0.50 removed `--quiet`, so earlier releases fail every `sbx`
 session's create on it.
