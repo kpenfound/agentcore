@@ -369,7 +369,7 @@ func (c *container) clientEnv() []string {
 		names[v.name] = true
 	}
 	var env []string
-	for _, kv := range hostEnv(c.r.EnvironmentPrefix) {
+	for _, kv := range c.r.hostEnv() {
 		name, _, _ := strings.Cut(kv, "=")
 		if !names[name] {
 			env = append(env, kv)
@@ -477,6 +477,9 @@ type ContainerBoundary struct {
 	// image has (see NewContainer). Their sources need no grant: they show
 	// the container nothing of the host but the stand-ins themselves.
 	Masks []Bind
+	// noSession leaves the session directory unbound (a Complete call's
+	// sandbox, through SandboxBoundary).
+	noSession bool
 }
 
 // Verify checks the request and builds the container turn. It fails closed:
@@ -634,6 +637,7 @@ func (b ContainerBoundary) bind(set *bindSet, req Request, turn *Turn) error {
 		}
 	}
 	switch {
+	case b.noSession:
 	case req.SessionDir != "":
 		if err := need("session directory", req.SessionDir, "", resolve); err != nil {
 			return err

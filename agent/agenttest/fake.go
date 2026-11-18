@@ -138,9 +138,15 @@ exec sleep 60
 // script, one call per line, and fails when a file named fail-policy is
 // there, `policy rm` also when one named fail-policy-rm is; `rm` records
 // its arguments in sbx-rm.txt beside the script; `version` prints one, and
-// fails when a file named fail-version is there. Every call but `exec` and
-// `version` also appends its first two arguments to sbx-calls.txt beside
-// the script, in the order they ran.
+// fails when a file named fail-version is there; `ls`, which needs the
+// daemon to answer, appends its arguments to sbx-ls.txt beside the script
+// (never to sbx-calls.txt), lists no sandboxes, fails the way a stopped
+// daemon does when a file named fail-ls is there and never answers when one
+// named hang-ls is. A file named hang-create makes `create` record its
+// arguments and then wait until it is killed, the way a create that never
+// finishes does. Every call but `exec`, `version` and `ls` also appends
+// its first two arguments to sbx-calls.txt beside the script, in the order
+// they ran.
 //
 // `rm` and `policy` beside `policy rm` always succeed unless their marker
 // file is there: the fake does not check that a name passed to `rm` or a
@@ -164,8 +170,23 @@ version)
   echo "sbx version 0.42.0"
   exit 0
   ;;
+ls)
+  echo "$*" >> "$here/sbx-ls.txt"
+  if [ -f "$here/hang-ls" ]; then
+    exec sleep 600
+  fi
+  if [ -f "$here/fail-ls" ]; then
+    echo "Cannot connect to the sandbox daemon. Is it running?" >&2
+    exit 1
+  fi
+  echo "No sandboxes found"
+  exit 0
+  ;;
 create)
   printf '%s\n' "$@" > "$here/sbx-create.txt"
+  if [ -f "$here/hang-create" ]; then
+    exec sleep 600
+  fi
   if [ -f "$here/fail-create" ]; then
     echo "Error: sandbox name must not contain underscores" >&2
     exit 1

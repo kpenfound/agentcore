@@ -668,7 +668,7 @@ func workDir(req Request) string {
 // boundary selects what enforces the request's grants.
 func (r *Runner) boundary(req Request) Boundary {
 	if req.Profile.Sandbox == SandboxSbx {
-		b := SandboxBoundary{SessionsDir: r.SessionsDir, MountDirs: r.MountDirs}
+		b := SandboxBoundary{SessionsDir: r.SessionsDir, MountDirs: r.MountDirs, completion: r.completing}
 		if r.Skills != nil {
 			b.SkillMountDirs = r.SkillMountDirs
 		}

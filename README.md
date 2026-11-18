@@ -108,6 +108,150 @@ An ordinary pi session (`AgentPi`) has no MCP support of its own: the runner loa
 passes it as the adapter's `--mcp-config` with `PI_MCP_CONFIG_MODE=exclusive`.
 Restricted execution loads neither the adapter nor configured packages.
 
+## Completions in a Docker Sandbox
+
+`agent.Runner.Complete` runs one `claude -p` turn with no tools in a Docker
+Sandbox and returns its answer. It is for a caller that wants a model's
+text or a schema-checked JSON value, and has no use for an agent that edits
+files. `agent.Runner.CheckSandbox` is the quick check a caller runs at startup
+to learn whether `sbx` can be used at all.
+
+```go
+runner := &agent.Runner{}
+if err := runner.CheckSandbox(ctx); err != nil {
+	return err // sbx is missing, failed, or did not answer
+}
+c, err := runner.Complete(ctx, agent.CompletionRequest{
+	Name:         "distill-17",
+	Model:        "claude-sonnet-5-5",
+	SystemPrompt: "Reply with the sentiment of the text.",
+	Prompt:       "I love this.",
+	Schema:       json.RawMessage(`{"type":"object","properties":{"sentiment":{"type":"string"}},"required":["sentiment"]}`),
+	Timeout:      90 * time.Second,
+})
+var limit *agent.UsageLimitError
+var missing *agent.NoStructuredOutputError
+switch {
+case errors.As(err, &limit):
+	// Retry after limit.ResetsAt (zero when the stream gave no time).
+case errors.Is(err, context.DeadlineExceeded):
+	// The sandbox took too long to start or the turn took too long to end.
+case errors.As(err, &missing):
+	// The turn ended without structured output: missing.Subtype, missing.Result.
+case err != nil:
+	return err
+default:
+	fmt.Println(string(c.StructuredOutput), c.OutputTokens, c.CostUSD, c.SandboxStartup)
+}
+```
+
+### What a completion is
+
+- **Boundary.** Every completion runs in a Docker Sandbox: `sbx create`, then
+  `sbx exec` of `claude -p`, then `sbx rm --force` of the same sandbox,
+  whether the turn succeeded, failed, timed out or was cancelled. There is one
+  sandbox per call and none is reused. The runner's `SbxBin`, `SbxCheckTimeout`
+  and `SessionsDir` apply; `ClaudeBin` names the claude run in the sandbox.
+- **Working directory.** A new empty directory under the host's temporary
+  directory, which is the only workspace the sandbox is given and the turn's
+  working directory. The call removes it, and its own session directory, when
+  it returns. No caller directory, session directory or VCS is mounted, and no
+  Dagger engine is reachable.
+- **Claude's configuration.** No built-in tools (`--tools ""`), no setting
+  sources, no skills, an empty strict MCP configuration
+  (`--strict-mcp-config --mcp-config '{"mcpServers":{}}'`), no persisted
+  session. `--bare` is not used: it never reads the login the sandbox's proxy
+  holds. The only tool in a turn is the one Claude Code adds itself to return
+  structured output when a schema is given.
+- **System prompt.** `CompletionRequest.SystemPrompt` is required and replaces
+  Claude Code's default (`--system-prompt`); it is never appended. It travels as
+  one command-line argument, so it is limited to `MaxCompletionSystemPrompt`
+  bytes. The prompt reaches `claude` on stdin.
+- **Credentials.** None is read, forwarded or required. The login is the one
+  `sbx secret set` stored, which the sandbox's proxy supplies. The variables
+  `ANTHROPIC_*`, `CLAUDE_CODE_OAUTH_*`, every agent's credential variables and
+  `CLAUDE_CODE_MAX_OUTPUT_TOKENS` are removed from the environment the `sbx`
+  commands run in.
+- **Schema.** `Schema` (a JSON object) is passed with `--json-schema`, and
+  `Completion.StructuredOutput` is the result event's `structured_output` as raw
+  JSON. Without a schema it is nil. Claude Code returns structured output
+  through a tool of its own and retries a value that does not match, each of
+  which is a turn: a one-shot answer takes two. `MaxTurns` (default
+  `DefaultCompletionMaxTurns`, 8) bounds them.
+- **Output limit.** `MaxOutputTokens`, when above zero, is set as
+  `CLAUDE_CODE_MAX_OUTPUT_TOKENS` in the sandboxed claude's environment. When
+  zero, nothing is set. There is no temperature setting: the CLI has none.
+- **Other settings.** `Model` is passed as given (`--model`; empty leaves it to
+  claude). `CostCapUSD`, when above zero, is passed as `--max-budget-usd`.
+  `SandboxTemplate`, `SandboxCPUs` and `SandboxMemory` are `Profile.SandboxImage`,
+  `Profile.SandboxCPUs` and `Profile.SandboxMemory`.
+- **Result.** `Completion` holds `Text`, `StructuredOutput`, `InputTokens`,
+  `OutputTokens`, `CacheCreationTokens` and `CacheReadTokens` as the result
+  event's `usage` reports them, `CostUSD` and `CostKnown` (claude's own estimate
+  at API prices, and whether the event carried one), `Model` (the model the
+  stream named as answering; empty when it named none), `Duration` (from `sbx
+  exec` starting claude to its end) and `SandboxStartup` (from just before `sbx
+  create` to just before `sbx exec`).
+
+### Timeout and cancellation
+
+`CompletionRequest.Timeout` (default `DefaultCompletionTimeout`, five minutes)
+is one deadline over the whole call: `sbx create` and the checks around it, and
+the turn. The caller's context applies from the first moment as well, so a
+context that ends first ends the call. When the deadline passes or the context
+ends while `sbx create` is running, `claude` is never started, the sandbox that
+may have been made is still removed (a failed create is treated as having made
+one), the working directory is removed, and the error matches
+`context.DeadlineExceeded` or `context.Canceled` with `errors.Is`. The same
+holds while `claude` runs: the sandbox is removed and the process group
+killed. `Runner.Run` and `Runner.RunRestricted` keep their own timeout
+semantics, which start with `Profile.Timeout` once the sandbox exists.
+
+### Failures
+
+A call that does not return a `Completion` returns one of four kinds of error,
+tested in this order, so each failure is exactly one:
+
+1. `*agent.UsageLimitError` (`errors.As`): the stream's last rate-limit event
+   was blocking, or the turn failed with a result text naming a session or
+   usage limit (the recognition of `Result.SessionLimited`). `ResetsAt` is the
+   reset time the event reported, zero when it reported none; `Window` is its
+   kind (`five_hour`, `seven_day`) and `Message` claude's own sentence. This
+   holds when a schema was given and no `structured_output` came back, and
+   when the turn also ran out of time.
+2. The context's error (`errors.Is(err, context.DeadlineExceeded)` or
+   `context.Canceled`): the deadline passed or the caller cancelled.
+3. `*agent.NoStructuredOutputError` (`errors.As`, or `errors.Is(err,
+   agent.ErrNoStructuredOutput)`): a schema was given and the turn ended
+   without `structured_output`, as a success or as
+   `error_max_structured_output_retries`. When the turn failed, `Subtype` and
+   `Result` hold the CLI's error subtype and result text and the error text
+   names the session, the subtype and the result text.
+4. Any other failure: an error naming the session, the CLI's error subtype and
+   its result text (`<name> session: <subtype>: <text>`), for a turn that
+   ended in an error result, exited non-zero or printed no result.
+
+A request the call cannot run (no system prompt or prompt, a malformed schema,
+a negative count or timeout, an invalid sandbox size) is refused with an
+ordinary error before any `sbx` command runs.
+
+### Checking that sbx works
+
+`Runner.CheckSandbox(ctx)` runs `sbx ls`, which needs the `sbx` CLI installed
+and its daemon answering, under a timeout of `Runner.SbxCheckTimeout` (default
+`DefaultSandboxCheckTimeout`, 15 seconds) and the context. It creates no
+sandbox and makes no model call. It returns nil when `sbx` answers. Otherwise
+the error names the `sbx` executable (`Runner.SbxBin`, default `sbx`) and carries
+sbx's own message, the error of a missing executable, or the time it waited.
+
+### Testing
+
+`agenttest.Sbx` is the fake `sbx` for both calls. A file named `hang-create`
+beside it makes `create` record its arguments and then wait until it is
+killed, `hang-ls` does the same for `ls`, and `fail-ls` makes `ls` fail as a
+stopped daemon does. A caller points `Runner.SbxBin` at it and `Runner.ClaudeBin`
+at an `agenttest.Script` that prints a stream-json `result` event.
+
 ## Adding a backend
 
 A new agent CLI joins in one descriptor and one implementation, and every

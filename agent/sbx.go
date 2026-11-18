@@ -487,7 +487,10 @@ func sandboxName(session, suffix string) string {
 // run with the host's environment.
 func (r *Runner) sbxCommand(ctx context.Context, args ...string) *exec.Cmd {
 	cmd := agentbin.CommandContext(ctx, r.sbxBin(), args...)
-	cmd.Env = hostEnv(r.EnvironmentPrefix)
+	cmd.Env = r.hostEnv()
+	// A command whose context ends is killed; what it started that still
+	// holds its output must not hold the caller past that.
+	cmd.WaitDelay = 10 * time.Second
 	return cmd
 }
 
@@ -518,6 +521,9 @@ type SandboxBoundary struct {
 	MountDirs []string
 	// SkillMountDirs must be granted when the profile has skills.
 	SkillMountDirs []string
+	// completion is a Complete call's boundary: the session directory is not
+	// bound, so the sandbox sees the granted directory and nothing else.
+	completion bool
 }
 
 // Verify checks the request and builds the sandbox turn. It fails closed: a
@@ -528,14 +534,16 @@ func (b SandboxBoundary) Verify(req Request) (*Turn, error) {
 	if err != nil {
 		return nil, err
 	}
-	binds := ContainerBoundary{SessionsDir: b.SessionsDir, MountDirs: b.MountDirs, SkillMountDirs: b.SkillMountDirs}
+	binds := ContainerBoundary{SessionsDir: b.SessionsDir, MountDirs: b.MountDirs, SkillMountDirs: b.SkillMountDirs, noSession: b.completion}
 	if err := binds.bind(&bindSet{sbx: true}, req, turn); err != nil {
 		return nil, err
 	}
 	if turn.Env, err = isolatedEnv(req, turn, nil, ""); err != nil {
 		return nil, err
 	}
-	if !turn.VCS {
+	// A completion has no tool to run a VCS executable with, and its sandbox
+	// holds no directory the stand-ins could be put in.
+	if !turn.VCS && !b.completion {
 		turn.DeniedExecutables = slices.Clone(VCSExecutables)
 	}
 	return turn, nil

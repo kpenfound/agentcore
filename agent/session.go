@@ -219,6 +219,8 @@ type Runner struct {
 	// SbxBin is the Docker Sandboxes CLI a SandboxSbx session is run with.
 	// Default SandboxCLI.
 	SbxBin string
+	// SbxCheckTimeout bounds CheckSandbox. Default DefaultSandboxCheckTimeout.
+	SbxCheckTimeout time.Duration
 	// ContainerListen is the address the caller-supplied MCP server listens on
 	// for a container or sandbox session. Empty picks the address the box
 	// reaches the host by (see containerListen and sandboxListen).
@@ -254,6 +256,11 @@ type Runner struct {
 	// held is set by a Session for its turns: what Prepare reported, which
 	// every turn is checked against before anything starts.
 	held *held
+	// completing is set on the copy of the runner Complete and CheckSandbox
+	// work with: the host environment its sbx commands run in is stripped of
+	// agent credentials (hostEnv), and its sandbox is given the call's empty
+	// directory alone (r.boundary).
+	completing bool
 	// Stream, when set, receives every stream-json line (debug output).
 	Stream io.Writer
 	Logger *slog.Logger
@@ -270,6 +277,20 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 
 // run is the lifecycle shared by ordinary and restricted execution.
 func (r *Runner) run(ctx context.Context, req Request, restricted bool) (*Result, error) {
+	return r.runTurn(ctx, req, turnKind{restricted: restricted})
+}
+
+// turnKind is what sets one turn of the shared lifecycle apart: a restricted
+// turn (RunRestricted), or a completion (Complete), whose state the
+// lifecycle fills in as it goes.
+type turnKind struct {
+	restricted bool
+	completion *completionTurn
+}
+
+// runTurn is the lifecycle run, RunRestricted and Complete share.
+func (r *Runner) runTurn(ctx context.Context, req Request, kind turnKind) (*Result, error) {
+	restricted := kind.restricted
 	runner := *r
 	r = &runner // per-run defaults must not mutate a shared runner
 	if r.Logger == nil {
@@ -326,9 +347,10 @@ func (r *Runner) run(ctx context.Context, req Request, restricted bool) (*Result
 		return nil, err
 	}
 
-	paths := sessionPaths{dir: sessionDir, systemPrompt: systemPromptPath, prompt: promptPath, restricted: restricted}
+	paths := sessionPaths{dir: sessionDir, systemPrompt: systemPromptPath, prompt: promptPath, restricted: restricted, completion: kind.completion}
 	paths.mcp = maps.Clone(req.Profile.MCP)
 	var box box
+	startupBegan := time.Now()
 	switch req.Profile.Sandbox {
 	case SandboxContainer:
 		box, err = r.startContainer(ctx, req, sessionDir, turn)
@@ -494,6 +516,13 @@ func (r *Runner) run(ctx context.Context, req Request, restricted bool) (*Result
 		start = func() error { return confiner.Start(cmd, confinement) }
 	}
 
+	if cs := kind.completion; cs != nil {
+		// Everything before this point is the sandbox starting: `sbx
+		// create`, the checks and the command line built. The turn is what
+		// follows.
+		cs.startup = time.Since(startupBegan)
+		cs.turnBegan = time.Now()
+	}
 	r.Logger.Info("session start", "session", req.Name, "role", req.Profile.Name, "agent", req.Profile.Agent, "model", req.Profile.Model, "sandbox", req.Profile.Sandbox, "confined", turn.Confinement != nil, "dir", req.workDir())
 	if err := start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", filepath.Base(bin), err)
@@ -522,6 +551,10 @@ func (r *Runner) run(ctx context.Context, req Request, restricted bool) (*Result
 	}
 	waitErr := cmd.Wait()
 	res.Duration = time.Since(started)
+	if cs := kind.completion; cs != nil {
+		cs.turn = time.Since(cs.turnBegan)
+		cs.final = final
+	}
 	if scanErr != nil {
 		r.Logger.Warn("session output error", "session", req.Name, "err", scanErr)
 	}

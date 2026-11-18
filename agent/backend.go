@@ -107,6 +107,9 @@ type sessionPaths struct {
 	// interruptibleStdinBackend); nil for every other call, including
 	// every non-stdin backend's.
 	stop <-chan struct{}
+	// completion is the turn's state when it is a Complete call, which
+	// builds a command line of its own (completionArgs), and nil otherwise.
+	completion *completionTurn
 }
 
 // streamEnd is what a backend read off the end of a session's stream, in
@@ -126,6 +129,14 @@ type streamEnd struct {
 	// may not mention: an MCP server that did not start, an MCP tool call
 	// that failed.
 	Diagnostics []string
+	// Usage, StructuredOutput and Model are what claude's result event and
+	// stream report beyond the Result's own fields; only a completion reads
+	// them, and Result does not carry them.
+	Usage            tokenUsage
+	StructuredOutput json.RawMessage
+	Model            string
+	// CostReported is whether the result event carried total_cost_usd at all.
+	CostReported bool
 }
 
 // claudeBackend runs a session as `claude -p`.
@@ -133,6 +144,9 @@ type claudeBackend struct{}
 
 func (claudeBackend) command(ctx context.Context, r *Runner, b Backend, req Request, paths sessionPaths) (string, []string, string, []envVar, error) {
 	bin := b.executable(r)
+	if paths.completion != nil {
+		return bin, completionArgs(req, paths.completion), req.Prompt, nil, nil
+	}
 	boxed := req.Profile.Sandbox == SandboxClaude
 	args := []string{
 		"-p",
@@ -244,14 +258,42 @@ func (claudeBackend) command(ctx context.Context, r *Runner, b Backend, req Requ
 
 // streamResult is the final "result" event of claude's stream-json output.
 type streamResult struct {
-	Type         string  `json:"type"`
-	Subtype      string  `json:"subtype"`
-	IsError      bool    `json:"is_error"`
-	Result       string  `json:"result"`
-	SessionID    string  `json:"session_id"`
-	NumTurns     int     `json:"num_turns"`
-	TotalCostUSD float64 `json:"total_cost_usd"`
-	DurationMS   int64   `json:"duration_ms"`
+	Type         string   `json:"type"`
+	Subtype      string   `json:"subtype"`
+	IsError      bool     `json:"is_error"`
+	Result       string   `json:"result"`
+	SessionID    string   `json:"session_id"`
+	NumTurns     int      `json:"num_turns"`
+	TotalCostUSD *float64 `json:"total_cost_usd"`
+	DurationMS   int64    `json:"duration_ms"`
+	Usage        struct {
+		InputTokens         int64 `json:"input_tokens"`
+		OutputTokens        int64 `json:"output_tokens"`
+		CacheCreationTokens int64 `json:"cache_creation_input_tokens"`
+		CacheReadTokens     int64 `json:"cache_read_input_tokens"`
+	} `json:"usage"`
+	// ModelUsage is keyed by the models that answered.
+	ModelUsage       map[string]modelUsage `json:"modelUsage"`
+	StructuredOutput json.RawMessage       `json:"structured_output"`
+}
+
+type modelUsage struct {
+	OutputTokens int64 `json:"outputTokens"`
+}
+
+// tokenUsage is the token counts of a turn as claude's result event reports
+// them.
+type tokenUsage struct {
+	Input, Output, CacheCreation, CacheRead int64
+}
+
+// streamModel is the part of claude's "system" init and "assistant" events
+// that names the model.
+type streamModel struct {
+	Model   string `json:"model"`
+	Message struct {
+		Model string `json:"model"`
+	} `json:"message"`
 }
 
 // rateLimitEvent is a "rate_limit_event" of claude's stream-json output:
@@ -273,15 +315,33 @@ type rateLimitEvent struct {
 func (claudeBackend) consume(r *Runner, stdout io.Reader, transcript io.Writer, cost *costMeter) (*streamEnd, *RateLimit, error) {
 	var final *streamResult
 	var limit *RateLimit
+	// initModel is the model the session started with and answered the
+	// model of the last assistant message: what a completion reports.
+	var initModel, answered string
 	err := r.tee(stdout, transcript, func(line []byte, typ string) {
 		switch typ {
+		case "system", "assistant":
+			var m streamModel
+			if err := json.Unmarshal(line, &m); err != nil {
+				return
+			}
+			if typ == "system" && m.Model != "" {
+				initModel = m.Model
+			}
+			if typ == "assistant" && m.Message.Model != "" {
+				answered = m.Message.Model
+			}
 		case "result":
 			var sr streamResult
 			if err := json.Unmarshal(line, &sr); err == nil {
 				final = &sr
 				// total_cost_usd is the session's running total, not
 				// what this turn added to it.
-				cost.total(sr.TotalCostUSD)
+				usd := 0.0
+				if sr.TotalCostUSD != nil {
+					usd = *sr.TotalCostUSD
+				}
+				cost.total(usd)
 			}
 		case "rate_limit_event":
 			var ev rateLimitEvent
@@ -298,12 +358,30 @@ func (claudeBackend) consume(r *Runner, stdout io.Reader, transcript io.Writer, 
 	if final == nil {
 		return nil, limit, err
 	}
+	model := answered
+	if model == "" && len(final.ModelUsage) > 0 {
+		for name, u := range final.ModelUsage {
+			if model == "" || u.OutputTokens > final.ModelUsage[model].OutputTokens || u.OutputTokens == final.ModelUsage[model].OutputTokens && name < model {
+				model = name
+			}
+		}
+	}
+	if model == "" {
+		model = initModel
+	}
 	return &streamEnd{
 		SessionID: final.SessionID,
 		Result:    final.Result,
 		IsError:   final.IsError,
 		Subtype:   final.Subtype,
 		NumTurns:  final.NumTurns,
+		Usage: tokenUsage{
+			Input: final.Usage.InputTokens, Output: final.Usage.OutputTokens,
+			CacheCreation: final.Usage.CacheCreationTokens, CacheRead: final.Usage.CacheReadTokens,
+		},
+		StructuredOutput: final.StructuredOutput,
+		Model:            model,
+		CostReported:     final.TotalCostUSD != nil,
 	}, limit, err
 }
 
