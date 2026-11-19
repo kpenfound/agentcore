@@ -246,12 +246,12 @@ Every `sbx create` resolves the agent's kit, and pulls the template, from its
 registry. A caller making many completions — hundreds an hour — makes one
 registry request per call that way, and a few seconds of sandbox startup
 each. `Runner.NewCompleter(agent.CompleterOptions{Name, Size,
-SandboxTemplate, SandboxCPUs, SandboxMemory})` returns a `*agent.Completer`
+SandboxTemplate, SandboxCPUs, SandboxMemory, IdleTimeout})` returns a `*agent.Completer`
 whose `Complete` has `Runner.Complete`'s contract but keeps its sandboxes
 between calls:
 
 ```go
-completer := runner.NewCompleter(agent.CompleterOptions{Name: "distill", Size: 2})
+completer := runner.NewCompleter(agent.CompleterOptions{Name: "distill", Size: 2, IdleTimeout: 5 * time.Minute})
 defer completer.Close(context.Background())
 c, err := completer.Complete(ctx, agent.CompletionRequest{ /* as above */ })
 ```
@@ -274,8 +274,15 @@ c, err := completer.Complete(ctx, agent.CompletionRequest{ /* as above */ })
   fresh one, after any other ending: claude never started, the client exited
   without a result (a sandbox sbx no longer has), or the call timed out or was
   cancelled while claude might still run in it.
+- With an `IdleTimeout`, a kept sandbox no call has taken for that long is
+  removed (`sbx rm`, its workspace and session directory), and the next call
+  creates a fresh one. Each sandbox is a VM holding memory while it is kept,
+  so a caller with bursts of calls keeps them warm through a burst and frees
+  them between bursts, at one create per sandbox per burst. A sandbox in use
+  is never removed this way. Zero keeps sandboxes until `Close`.
 - `Close(ctx)` removes the free sandboxes at once and each busy one when its
-  call ends, waiting for those calls until `ctx` ends. Calls after it, and
+  call ends, waiting for those calls, and for a removal the idle reaper had
+  begun, until `ctx` ends. Calls after it, and
   calls it finds waiting, return `agent.ErrCompleterClosed`. Each sandbox's
   name and workspace are recorded in a session directory of its own while
   they exist, so a process that dies without `Close` leaves them for

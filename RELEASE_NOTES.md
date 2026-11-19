@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+`CompleterOptions.IdleTimeout`, when above zero, removes a `Completer`'s kept
+sandbox once no call has taken it for that long; the next call creates a
+fresh one. Sandboxes are VMs that hold memory while kept, so a caller with
+bursts of completions keeps them warm through a burst and frees them between
+bursts. A sandbox in use is never removed for being idle, and `Close` stops
+the reaper and waits for a removal it had begun. Zero keeps the previous
+behaviour: sandboxes stay until `Close`.
+
+## v1.2.3
+
 `Runner.NewCompleter` returns a `Completer`, whose `Complete` has
 `Runner.Complete`'s contract but runs each call with `sbx exec` in a sandbox
 it keeps, creating at most `CompleterOptions.Size` of them, instead of

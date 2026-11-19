@@ -216,3 +216,127 @@ func TestASandboxCreateRefusedForTheRateLimitIsErrRegistryRateLimited(t *testing
 		})
 	}
 }
+
+// removes is how many times `sbx rm` ran.
+func (f *completionFixture) removes(t *testing.T) int {
+	t.Helper()
+	n := 0
+	for _, call := range lines(t, filepath.Join(f.sbx, "sbx-calls.txt")) {
+		if strings.HasPrefix(call, "rm ") {
+			n++
+		}
+	}
+	return n
+}
+
+// eventually polls cond until it holds, failing the test after a generous
+// deadline: the reaper runs on its own time.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// A sandbox kept past its IdleTimeout is removed, so an idle Completer holds
+// no VM, and the next call creates a fresh one.
+func TestAnIdleSandboxIsRemovedAfterItsIdleTimeout(t *testing.T) {
+	f := newCompletionFixture(t, poolClaude+okStream)
+	before := f.entries(t)
+	c := f.r.NewCompleter(CompleterOptions{Name: "distill", IdleTimeout: 50 * time.Millisecond})
+
+	if _, err := c.Complete(context.Background(), completionRequest()); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the idle sandbox to be removed", func() bool { return f.removes(t) == 1 })
+	// sbx rm runs before the workspace and session directories go.
+	eventually(t, "the removed sandbox's directories to go", func() bool { return slices.Equal(f.entries(t), before) })
+	if _, err := c.Complete(context.Background(), completionRequest()); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.creates(t); n != 2 {
+		t.Errorf("creates = %d, want a fresh sandbox for the call after the removal", n)
+	}
+	if err := c.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.removes(t); n != 2 {
+		t.Errorf("removes after Close = %d, want the second sandbox removed too", n)
+	}
+	if after := f.entries(t); !slices.Equal(after, before) {
+		t.Errorf("left behind after Close: %v, want %v", after, before)
+	}
+}
+
+// Calls that keep arriving within the IdleTimeout share one sandbox: the
+// timeout empties a pool between bursts, never during one.
+func TestCallsWithinTheIdleTimeoutReuseTheSandbox(t *testing.T) {
+	f := newCompletionFixture(t, poolClaude+okStream)
+	c := f.r.NewCompleter(CompleterOptions{Name: "distill", IdleTimeout: 5 * time.Second})
+	defer c.Close(context.Background())
+
+	for i := 0; i < 3; i++ {
+		if _, err := c.Complete(context.Background(), completionRequest()); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+	}
+	if creates, removes := f.creates(t), f.removes(t); creates != 1 || removes != 0 {
+		t.Errorf("creates, removes = %d, %d; want one sandbox kept through the burst", creates, removes)
+	}
+}
+
+// A sandbox a call is using is never removed for being idle, however long the
+// call runs; it becomes idle, and can be removed, only once the call ends.
+func TestABusySandboxIsNotRemovedForBeingIdle(t *testing.T) {
+	f := newCompletionFixture(t, poolClaude+okStream)
+	c := f.r.NewCompleter(CompleterOptions{Name: "distill", IdleTimeout: 100 * time.Millisecond})
+	defer c.Close(context.Background())
+	if _, err := c.Complete(context.Background(), completionRequest()); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the first sandbox to be removed", func() bool { return f.removes(t) == 1 })
+
+	// Each turn now outlasts the IdleTimeout three times over. The check
+	// right after it returns has the whole IdleTimeout before the sandbox,
+	// idle again, may go.
+	if err := os.WriteFile(filepath.Join(f.rec, "linger"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Complete(context.Background(), completionRequest()); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.removes(t); n != 1 {
+		t.Errorf("removes when the long call returned = %d, want 1: its sandbox was removed while in use", n)
+	}
+	eventually(t, "the sandbox to be removed once idle", func() bool { return f.removes(t) == 2 })
+}
+
+// Close after the reaper has removed a sandbox is clean, and stops it: nothing
+// is removed after Close returns.
+func TestCloseStopsTheReaper(t *testing.T) {
+	f := newCompletionFixture(t, poolClaude+okStream)
+	before := f.entries(t)
+	c := f.r.NewCompleter(CompleterOptions{Name: "distill", Size: 2, IdleTimeout: 30 * time.Millisecond})
+	if _, err := c.Complete(context.Background(), completionRequest()); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the idle sandbox to be removed", func() bool { return f.removes(t) == 1 })
+	if _, err := c.Complete(context.Background(), completionRequest()); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	removed := f.removes(t)
+	time.Sleep(150 * time.Millisecond) // several IdleTimeouts: a reaper still running would act
+	if n := f.removes(t); n != removed || n != 2 {
+		t.Errorf("removes = %d after Close and %d later, want 2 and no more", removed, n)
+	}
+	if after := f.entries(t); !slices.Equal(after, before) {
+		t.Errorf("left behind: %v, want %v", after, before)
+	}
+}

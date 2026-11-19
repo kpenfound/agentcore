@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/kpenfound/agentcore/agent/procs"
 	"github.com/kpenfound/agentcore/vcs"
@@ -27,6 +28,9 @@ type CompleterOptions struct {
 	SandboxTemplate string
 	SandboxCPUs     int
 	SandboxMemory   string
+	// IdleTimeout, when above zero, removes a kept sandbox no call has used for
+	// that long. Zero keeps sandboxes until Close.
+	IdleTimeout time.Duration
 }
 
 // ErrCompleterClosed is what Completer.Complete returns once Close has been
@@ -56,6 +60,11 @@ var ErrCompleterClosed = errors.New("completer closed")
 // without a result (a sandbox sbx no longer has, for one), or the call timed
 // out or was cancelled while claude may still be running in it.
 //
+// With an IdleTimeout, a kept sandbox no call has taken for that long is
+// removed, and the next call creates a fresh one: sandboxes stay warm through
+// a burst of calls and are gone between bursts. A sandbox a call is using is
+// never removed this way.
+//
 // A Completer is safe for concurrent use. Close removes its sandboxes.
 type Completer struct {
 	r    *Runner
@@ -67,10 +76,18 @@ type Completer struct {
 
 	mu     sync.Mutex
 	closed bool
-	idle   []*pooledSandbox
+	// idle is the kept sandboxes no call is using, the most recently
+	// returned last: take uses that one, so the oldest are the ones that
+	// reach the IdleTimeout.
+	idle []*pooledSandbox
+	// reaping is whether the reaper goroutine is running. It runs while a
+	// sandbox is idle and the Completer has an IdleTimeout, and stops when
+	// none is or the Completer closes.
+	reaping bool
 	// calls counts the calls Complete has admitted and not yet finished,
-	// which Close waits for.
-	calls sync.WaitGroup
+	// and reaper the reaper goroutine; Close waits for both.
+	calls  sync.WaitGroup
+	reaper sync.WaitGroup
 }
 
 // pooledSandbox is one of a Completer's sandboxes: the sandbox, the
@@ -80,6 +97,8 @@ type pooledSandbox struct {
 	box        *sandbox
 	workspace  string
 	sessionDir string
+	// idleSince is when the sandbox last went back to the idle set.
+	idleSince time.Time
 }
 
 // NewCompleter returns a Completer that runs completions with this runner's
@@ -174,12 +193,71 @@ func (c *Completer) take(ctx context.Context) (*pooledSandbox, error) {
 func (c *Completer) give(p *pooledSandbox, healthy bool) {
 	c.mu.Lock()
 	if healthy && !c.closed {
+		p.idleSince = time.Now()
 		c.idle = append(c.idle, p)
+		if c.opts.IdleTimeout > 0 && !c.reaping {
+			// Added under mu, with closed false: Close sets closed under mu
+			// before it waits, so it never waits on a WaitGroup still being
+			// added to.
+			c.reaping = true
+			c.reaper.Add(1)
+			go c.reap()
+		}
 		c.mu.Unlock()
 		return
 	}
 	c.mu.Unlock()
 	c.discard(p)
+}
+
+// reap removes the idle sandboxes that have been idle for the IdleTimeout,
+// sleeping until the oldest one is due. Taking a sandbox and reaping one both
+// hold mu while they take it out of the idle set, so a sandbox is either
+// handed to a call or removed, never both. It returns when no sandbox is idle,
+// and give starts it again when one is, or when the Completer closes.
+func (c *Completer) reap() {
+	defer c.reaper.Done()
+	timer := time.NewTimer(c.opts.IdleTimeout)
+	defer timer.Stop()
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-timer.C:
+		}
+		now := time.Now()
+		var expired []*pooledSandbox
+		c.mu.Lock()
+		if c.closed {
+			c.mu.Unlock()
+			return
+		}
+		kept := c.idle[:0]
+		next := time.Duration(0)
+		for _, p := range c.idle {
+			if age := now.Sub(p.idleSince); age >= c.opts.IdleTimeout {
+				expired = append(expired, p)
+			} else if wait := c.opts.IdleTimeout - age; next == 0 || wait < next {
+				kept = append(kept, p)
+				next = wait
+			} else {
+				kept = append(kept, p)
+			}
+		}
+		clear(c.idle[len(kept):])
+		c.idle = kept
+		if len(c.idle) == 0 {
+			c.reaping = false
+		}
+		c.mu.Unlock()
+		for _, p := range expired {
+			c.discard(p)
+		}
+		if next == 0 {
+			return
+		}
+		timer.Reset(next)
+	}
 }
 
 // create makes a sandbox for the Completer: an empty workspace under the
@@ -253,7 +331,8 @@ func (c *Completer) discard(p *pooledSandbox) {
 
 // Close removes every sandbox the Completer created: the free ones at once,
 // and each one a call is still using when that call ends, which Close waits
-// for until ctx ends. A call that Close finds waiting for a sandbox returns
+// for until ctx ends. It stops the reaper, and waits for a removal the
+// reaper had begun. A call that Close finds waiting for a sandbox returns
 // ErrCompleterClosed, and so does every call after it. Close is safe to call
 // more than once and from several goroutines; it returns ctx's error when ctx
 // ended before every call did, and nil otherwise.
@@ -272,6 +351,7 @@ func (c *Completer) Close(ctx context.Context) error {
 	finished := make(chan struct{})
 	go func() {
 		c.calls.Wait()
+		c.reaper.Wait()
 		close(finished)
 	}()
 	select {
