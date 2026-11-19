@@ -355,7 +355,11 @@ func (r *Runner) runTurn(ctx context.Context, req Request, kind turnKind) (*Resu
 	case SandboxContainer:
 		box, err = r.startContainer(ctx, req, sessionDir, turn)
 	case SandboxSbx:
-		box, err = r.startSandbox(ctx, req, sessionDir, turn)
+		if cs := kind.completion; cs != nil && cs.sandbox != "" {
+			box = r.reuseSandbox(req, sessionDir, turn, cs.sandbox)
+		} else {
+			box, err = r.startSandbox(ctx, req, sessionDir, turn)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", req.Profile.Name, err)

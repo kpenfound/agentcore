@@ -136,6 +136,31 @@ func (r *Runner) startSandbox(ctx context.Context, req Request, sessionDir strin
 	return s, nil
 }
 
+// reuseSandbox is a completion's turn in a sandbox a Completer created and
+// still owns: the turn's own session directory, verified turn and
+// variables, run with `sbx exec` in the named sandbox. Nothing is created,
+// and closing it, or stopping the turn, leaves the sandbox: it is not this
+// turn's to remove (created stays false). The Completer decides from how
+// the turn ended whether the sandbox is kept for the next call.
+func (r *Runner) reuseSandbox(req Request, sessionDir string, turn *Turn, name string) *sandbox {
+	s := &sandbox{container: container{r: r, req: req, sessionDir: sessionDir, turn: turn, name: name, listen: r.sandboxListen}}
+	s.vars = turnVars(turn)
+	return s
+}
+
+// ErrRegistryRateLimited is what a failed `sbx create` matches with
+// errors.Is when the registry sbx resolves the agent's kit or template from
+// refused it for its pull rate limit (HTTP 429, "toomanyrequests"). Waiting
+// for the registry's window to pass is what helps, not retrying at once.
+var ErrRegistryRateLimited = errors.New("the registry's pull rate limit was reached")
+
+// registryRateLimited is whether sbx's output says a registry refused it
+// for its rate limit.
+func registryRateLimited(out []byte) bool {
+	msg := strings.ToLower(string(out))
+	return strings.Contains(msg, "toomanyrequests") || strings.Contains(msg, "status code 429") || strings.Contains(msg, "429 too many requests")
+}
+
 // mcpEntries are the MCP servers the session is given: the container's,
 // with each granted host server's entry at host.docker.internal.
 func (s *sandbox) mcpEntries(mcp map[string]MCPEntry) map[string]MCPEntry {
@@ -227,6 +252,9 @@ func (s *sandbox) create(ctx context.Context) (err error) {
 	if out, err := s.r.sbxCommand(ctx, args...).CombinedOutput(); err != nil {
 		if msg := bytes.TrimSpace(out); len(msg) > 0 {
 			err = fmt.Errorf("%w: %s", err, msg)
+		}
+		if registryRateLimited(out) {
+			err = fmt.Errorf("%w: %w", ErrRegistryRateLimited, err)
 		}
 		s.created = true
 		s.remove()

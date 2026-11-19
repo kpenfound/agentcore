@@ -163,6 +163,9 @@ func (e *NoStructuredOutputError) Is(target error) bool { return target == ErrNo
 // (runTurn) and what the lifecycle recorded for Complete.
 type completionTurn struct {
 	schema string
+	// sandbox is the existing sandbox a Completer runs the turn in; empty
+	// creates one for the turn and removes it after.
+	sandbox string
 	// startup is the time before claude started, turnBegan when it did,
 	// turn how long it ran, final what its stream ended with.
 	startup   time.Duration
@@ -254,24 +257,52 @@ func (r *Runner) Complete(ctx context.Context, req CompletionRequest) (*Completi
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
-	name := req.Name
-	if name == "" {
-		name = "completion"
-	}
-	timeout := req.Timeout
-	if timeout <= 0 {
-		timeout = DefaultCompletionTimeout
-	}
-	maxTurns := req.MaxTurns
-	if maxTurns == 0 {
-		maxTurns = DefaultCompletionMaxTurns
-	}
+	name, timeout := req.callName(), req.timeout()
 	// One deadline over everything below, sandbox startup included: the
 	// shared lifecycle starts the sandbox before it applies the profile's
 	// own timeout, so that one is not enough.
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	runner := r.completionRunner()
+	turn, res, err := runner.runCompletion(ctx, req, completionPlace{
+		template: req.SandboxTemplate, cpus: req.SandboxCPUs, memory: req.SandboxMemory,
+	})
+	if err != nil {
+		return nil, completionError(ctx, name, err)
+	}
+	return classifyCompletion(name, timeout, turn, res)
+}
 
+// callName is the call's name, "completion" when the request names none.
+func (c CompletionRequest) callName() string {
+	if c.Name == "" {
+		return "completion"
+	}
+	return c.Name
+}
+
+// timeout is the call's deadline, DefaultCompletionTimeout when the request
+// names none.
+func (c CompletionRequest) timeout() time.Duration {
+	if c.Timeout <= 0 {
+		return DefaultCompletionTimeout
+	}
+	return c.Timeout
+}
+
+// completionError names the call on a failure of the lifecycle itself,
+// matching the context's error when the context ended the call.
+func completionError(ctx context.Context, name string, err error) error {
+	if ctx.Err() != nil {
+		return fmt.Errorf("%s session: %w: %v", name, ctx.Err(), err)
+	}
+	return fmt.Errorf("%s session: %w", name, err)
+}
+
+// completionRunner is the copy of the runner a completion runs with: its
+// commands keep every agent credential out of the client's environment
+// (hostEnv), and it adds nothing of the runner's own directories or skills.
+func (r *Runner) completionRunner() *Runner {
 	runner := *r
 	runner.completing = true
 	runner.AddDirs, runner.MountDirs, runner.SkillMountDirs, runner.Skills = nil, nil, nil, nil
@@ -281,14 +312,39 @@ func (r *Runner) Complete(ctx context.Context, req CompletionRequest) (*Completi
 	if runner.Logger == nil {
 		runner.Logger = slog.Default()
 	}
+	return &runner
+}
+
+// completionPlace is where a completion's turn runs: a sandbox created for
+// the call from the template and sizing given, or, when sandbox names one, a
+// Completer's sandbox that already exists, with the call's working
+// directory made inside workParent, the workspace that sandbox was created
+// with.
+type completionPlace struct {
+	sandbox, workParent string
+	template            string
+	cpus                int
+	memory              string
+}
+
+// runCompletion runs one completion's turn through the shared lifecycle and
+// returns what it recorded, for classifyCompletion. The call's session
+// directory and working directory are its own and are removed when it
+// returns.
+func (runner *Runner) runCompletion(ctx context.Context, req CompletionRequest, place completionPlace) (*completionTurn, *Result, error) {
+	name := req.callName()
+	maxTurns := req.MaxTurns
+	if maxTurns == 0 {
+		maxTurns = DefaultCompletionMaxTurns
+	}
 	sessionDir, err := runner.NewSessionDir(name)
 	if err != nil {
-		return nil, fmt.Errorf("%s session: %w", name, err)
+		return nil, nil, err
 	}
 	defer func() { _ = os.RemoveAll(sessionDir) }()
-	work, err := os.MkdirTemp("", runner.namePrefix()+"completion-")
+	work, err := os.MkdirTemp(place.workParent, runner.namePrefix()+"completion-")
 	if err != nil {
-		return nil, fmt.Errorf("%s session: make the working directory: %w", name, err)
+		return nil, nil, fmt.Errorf("make the working directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(work) }()
 	if resolved, err := filepath.EvalSymlinks(work); err == nil {
@@ -296,15 +352,15 @@ func (r *Runner) Complete(ctx context.Context, req CompletionRequest) (*Completi
 	}
 
 	profile := Profile{
-		Name: name, Agent: AgentClaude, Model: req.Model, MaxTurns: maxTurns, Timeout: timeout,
-		Sandbox: SandboxSbx, SandboxImage: req.SandboxTemplate, SandboxCPUs: req.SandboxCPUs, SandboxMemory: req.SandboxMemory,
+		Name: name, Agent: AgentClaude, Model: req.Model, MaxTurns: maxTurns, Timeout: req.timeout(),
+		Sandbox: SandboxSbx, SandboxImage: place.template, SandboxCPUs: place.cpus, SandboxMemory: place.memory,
 	}
 	grants := &Grants{Tools: []string{}, Mounts: []Mount{{Path: work, Access: ReadWrite}}}
 	if req.MaxOutputTokens > 0 {
 		profile.Env = map[string]string{EnvMaxOutputTokens: strconv.Itoa(req.MaxOutputTokens)}
 		grants.Env = []string{EnvMaxOutputTokens}
 	}
-	turn := &completionTurn{}
+	turn := &completionTurn{sandbox: place.sandbox}
 	if len(bytes.TrimSpace(req.Schema)) > 0 {
 		turn.schema = string(req.Schema)
 	}
@@ -313,13 +369,7 @@ func (r *Runner) Complete(ctx context.Context, req CompletionRequest) (*Completi
 		SystemPrompt: req.SystemPrompt, Prompt: req.Prompt, SessionDir: sessionDir,
 		CostCapUSD: req.CostCapUSD, Grants: grants,
 	}, turnKind{completion: turn})
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("%s session: %w: %v", name, ctx.Err(), err)
-		}
-		return nil, fmt.Errorf("%s session: %w", name, err)
-	}
-	return classifyCompletion(name, timeout, turn, res)
+	return turn, res, err
 }
 
 // classifyCompletion turns a finished turn into the completion or the one

@@ -235,6 +235,52 @@ A request the call cannot run (no system prompt or prompt, a malformed schema,
 a negative count or timeout, an invalid sandbox size) is refused with an
 ordinary error before any `sbx` command runs.
 
+A failed `sbx create` matches `agent.ErrRegistryRateLimited` with `errors.Is`
+when the registry sbx resolves the agent's kit or template from refused it
+for its pull rate limit (HTTP 429, `toomanyrequests`): what helps is waiting
+for the registry's window, not retrying at once.
+
+### Reusing sandboxes: `Completer`
+
+Every `sbx create` resolves the agent's kit, and pulls the template, from its
+registry. A caller making many completions — hundreds an hour — makes one
+registry request per call that way, and a few seconds of sandbox startup
+each. `Runner.NewCompleter(agent.CompleterOptions{Name, Size,
+SandboxTemplate, SandboxCPUs, SandboxMemory})` returns a `*agent.Completer`
+whose `Complete` has `Runner.Complete`'s contract but keeps its sandboxes
+between calls:
+
+```go
+completer := runner.NewCompleter(agent.CompleterOptions{Name: "distill", Size: 2})
+defer completer.Close(context.Background())
+c, err := completer.Complete(ctx, agent.CompletionRequest{ /* as above */ })
+```
+
+- A sandbox is created the first time a call finds none free, and each call
+  is one `sbx exec` of claude in a free one. At most `Size` (default 1)
+  sandboxes are alive, and as many calls run at once; a call beyond that waits
+  for one, within its own `Timeout`, which covers that wait, any `sbx create`
+  the call needs and the turn. The request's sandbox fields are ignored: the
+  options decide them.
+- Each call works in a new empty directory made inside the sandbox's
+  workspace and removed when it ends, with a session directory of its own on
+  the host that the sandbox is not given. Claude runs exactly as for
+  `Runner.Complete`, with no tool to read a file or run a command and
+  `--no-session-persistence`, so a turn leaves no session behind and nothing
+  one call was given reaches the next.
+- A sandbox is kept after a call whose turn reported its end, whatever it
+  answered (a `NoStructuredOutputError`, a `UsageLimitError` or a failed
+  result is the model's outcome). It is removed, and the next call creates a
+  fresh one, after any other ending: claude never started, the client exited
+  without a result (a sandbox sbx no longer has), or the call timed out or was
+  cancelled while claude might still run in it.
+- `Close(ctx)` removes the free sandboxes at once and each busy one when its
+  call ends, waiting for those calls until `ctx` ends. Calls after it, and
+  calls it finds waiting, return `agent.ErrCompleterClosed`. Each sandbox's
+  name and workspace are recorded in a session directory of its own while
+  they exist, so a process that dies without `Close` leaves them for
+  `procs.CleanSandboxes`.
+
 ### Checking that sbx works
 
 `Runner.CheckSandbox(ctx)` runs `sbx ls`, which needs the `sbx` CLI installed

@@ -144,7 +144,13 @@ exec sleep 60
 // daemon does when a file named fail-ls is there and never answers when one
 // named hang-ls is. A file named hang-create makes `create` record its
 // arguments and then wait until it is killed, the way a create that never
-// finishes does. Every call but `exec`, `version` and `ls` also appends
+// finishes does, and one named rate-limit-create makes it fail the way sbx
+// does when the registry refuses its kit for the pull rate limit (HTTP 429,
+// toomanyrequests). `exec --interactive` also appends its arguments to
+// sbx-exec.txt beside the script, one call per line, and a file named
+// fail-exec there makes the next one fail the way sbx does for a sandbox it
+// no longer has, without running the command, and is then removed. Every
+// call but `exec`, `version` and `ls` also appends
 // its first two arguments to sbx-calls.txt beside the script, in the order
 // they ran.
 //
@@ -189,6 +195,10 @@ create)
   fi
   if [ -f "$here/fail-create" ]; then
     echo "Error: sandbox name must not contain underscores" >&2
+    exit 1
+  fi
+  if [ -f "$here/rate-limit-create" ]; then
+    echo "error: resolve kits: kit \"docker.io/sbx/claude:latest\": fetch manifest: response status code 429: toomanyrequests: You have reached your pull rate limit" >&2
     exit 1
   fi
   if [ -f "$here/fail-start" ]; then
@@ -278,6 +288,12 @@ exec)
       exit 1
     fi
     exit 0
+  fi
+  echo "$*" >> "$here/sbx-exec.txt"
+  if [ -f "$here/fail-exec" ]; then
+    rm -f "$here/fail-exec"
+    echo "error: sandbox not found" >&2
+    exit 1
   fi
   printf '%s\n' "$@" > "$SESSION_DIRECTORY/sbx-exec-args.txt"
   env > "$SESSION_DIRECTORY/sbx-exec-env.txt"

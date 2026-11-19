@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+`Runner.NewCompleter` returns a `Completer`, whose `Complete` has
+`Runner.Complete`'s contract but runs each call with `sbx exec` in a sandbox
+it keeps, creating at most `CompleterOptions.Size` of them, instead of
+creating and removing one per call: one registry resolution of the kit per
+sandbox rather than per call. Each call gets a new empty working directory
+inside the sandbox's workspace, removed when it ends. A sandbox is replaced
+after a call that did not report the end of its turn (a missing sandbox, a
+timeout, a cancellation) and kept after any model outcome. `Close` removes
+them; `ErrCompleterClosed` refuses calls after it. A `sbx create` refused for
+the registry's pull rate limit matches `ErrRegistryRateLimited`, for every
+session. `agenttest.Sbx` has `rate-limit-create` and `fail-exec` markers and
+records each `exec --interactive` in `sbx-exec.txt`.
+
 `Runner.Complete` runs one tool-free `claude -p` turn in a Docker Sandbox of
 its own and returns a `Completion`: the text, the schema-checked
 `structured_output` as raw JSON, the token counts, the reported cost, the
