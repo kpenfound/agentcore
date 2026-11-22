@@ -42,7 +42,22 @@ The caller also supplies:
 - `Grants`, the session's complete capabilities (below). A request without
   them does not run.
 - An optional `SkillPreparer` and read-only skill cache mounts. Acquisition,
-  caching and configuration policy stay with the caller.
+  caching and configuration policy stay with the caller. Claude and Codex
+  turns receive `Profile.Skills`; opencode and pi receive none. Claude gets
+  each prepared plugin directory as `--plugin-dir`. Codex gets the absolute
+  path of each prepared plugin's `skills` directory in one
+  `skills/extraRoots/set` request on the session's own `codex app-server`,
+  sent after `initialize` and the `initialized` notification and before
+  `thread/start` or `thread/resume`, for ordinary, held, restricted and
+  resumed turns alike. A Codex turn with skills fails before any thread
+  starts when the runner has no `SkillPreparer`, preparation fails, a
+  prepared plugin has no `skills` directory (a native plugin may lack one),
+  the server answers `skills/extraRoots/set` with an error (a Codex too old
+  to know the method answers "method not found"), or the server ends before
+  answering. The session result is an error naming the request and carrying
+  the server's message, and no `thread/start`, `thread/resume` or `turn/start`
+  is sent. A Codex profile without skills never calls the preparer and sends
+  no such request.
 - An optional `CostCapUSD` on the request (zero is no cap). The runner stops
   the turn once the known cost its stream reports reaches the cap, and checks
   the final cost when the turn ends; either way the result has `CostCapped`
@@ -62,8 +77,15 @@ analysis turn. It accepts the same `Request` and uses the same backend command
 builders, stream parsers, timeout and process-group lifecycle as `Run`, but it
 owns the capability contract instead of accepting caller grants. The request
 may carry only a workspace, prompt, resume id, environment, cost cap and the
-profile's agent/model/effort/turn/timeout/fallback settings. It receives no MCP server,
-outcome contract, writable mount, VCS access, skill, plugin or hook. Variables
+profile's agent/model/effort/turn/timeout/fallback settings, and
+`Profile.Skills` on a Codex profile (primary or fallback). It receives no MCP
+server, outcome contract, writable mount, VCS access, plugin or hook, and no
+skill except those Codex skills: a Codex skill root adds instruction text, not
+tools, MCP servers or hooks, where a Claude plugin directory can carry hooks
+and MCP servers, so `Profile.Skills` on a claude, opencode or pi profile is
+rejected. The runner's `SkillPreparer` and `SkillMountDirs` serve a turn whose
+profile chain names Codex skills, which are registered as in `Run`; the turn
+fails if they cannot be. Variables
 with the runner's `EnvironmentPrefix` and VCS identity variables are removed. Claude is held to named read-only tools,
 empty settings sources and strict empty MCP configuration; Codex is held to its
 read-only sandbox, disabled command/network/plugin features and a fail-closed

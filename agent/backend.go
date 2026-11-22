@@ -110,6 +110,11 @@ type sessionPaths struct {
 	// completion is the turn's state when it is a Complete call, which
 	// builds a command line of its own (completionArgs), and nil otherwise.
 	completion *completionTurn
+	// skillRoots is where command leaves the skills directories a profile's
+	// prepared skills register (codexSkillRoots), for consumeStdin to send
+	// on the conversation. It stays empty for a turn that names no skills
+	// and for every backend that takes skills another way.
+	skillRoots *[]string
 }
 
 // streamEnd is what a backend read off the end of a session's stream, in
@@ -404,7 +409,15 @@ func (claudeBackend) consume(r *Runner, stdout io.Reader, transcript io.Writer, 
 // send as a parameter once the process is running instead.
 //
 // Conversation (codexRPCRun, codex_rpc.go): initialize, the initialized
-// notification; for a held turn, config/read for the working directory on
+// notification; when Profile.Skills is non-empty, one skills/extraRoots/set
+// request whose extraRoots are the absolute skills directories of the
+// skills Runner.Skills prepared (command prepares them, so a missing
+// preparer, a failed preparation or a prepared plugin without a skills
+// directory fails the session before the process starts), and an error
+// answer to that request, or a server that ends before answering it, ends
+// the session as an error naming skills/extraRoots/set before any thread
+// starts; a turn without skills prepares nothing and sends no such request;
+// for a held turn, config/read for the working directory on
 // this same process, checked by validateCodexSettings — a failure closes
 // stdin and ends the session as an error before any thread starts, and no
 // separate probe process ever runs; thread/start, or thread/resume with
@@ -455,7 +468,48 @@ func (codexBackend) interruptible(sessionPaths) bool {
 }
 
 func (codexBackend) command(ctx context.Context, r *Runner, b Backend, req Request, paths sessionPaths) (string, []string, string, []envVar, error) {
+	if len(req.Profile.Skills) > 0 && paths.skillRoots != nil {
+		// Prepared before the process starts, so a missing preparer or a
+		// failed preparation ends the session before any app-server runs.
+		roots, err := codexSkillRoots(ctx, r, req.Profile.Skills)
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+		*paths.skillRoots = roots
+	}
 	return codexAppServerCommand(ctx, r, b, req, paths)
+}
+
+// codexSkillRoots prepares skills through the runner's SkillPreparer and
+// returns the absolute path of each prepared plugin directory's skills
+// directory, in preparation order: the roots codex's skills/extraRoots/set
+// takes. A wrapper's skills directory holds the configured skill (or is the
+// collection); a native plugin passes through as it is. A prepared
+// directory without a skills directory, or a preparer that returns none, is
+// an error: a codex turn with configured skills never runs without them.
+func codexSkillRoots(ctx context.Context, r *Runner, skills []string) ([]string, error) {
+	if r.Skills == nil {
+		return nil, errors.New("session: skills configured but no skills manager")
+	}
+	dirs, err := r.Skills.Prepare(ctx, skills)
+	if err != nil {
+		return nil, fmt.Errorf("session: prepare skills: %w", err)
+	}
+	if len(dirs) == 0 {
+		return nil, errors.New("session: skills configured but none were prepared")
+	}
+	roots := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		root, err := filepath.Abs(filepath.Join(d, "skills"))
+		if err != nil {
+			return nil, fmt.Errorf("session: skills directory of %s: %w", d, err)
+		}
+		if info, err := os.Stat(root); err != nil || !info.IsDir() {
+			return nil, fmt.Errorf("session: prepared skill %s has no skills directory", d)
+		}
+		roots = append(roots, root)
+	}
+	return roots, nil
 }
 
 // codexAppServerCommand builds a turn's `codex app-server` command line:
@@ -519,6 +573,10 @@ func codexAppServerCommand(ctx context.Context, r *Runner, b Backend, req Reques
 // Request.ResumeID goes to codexRPCTurn.ResumeID, so a set id turns
 // thread/start into thread/resume.
 func (codexBackend) consumeStdin(r *Runner, req Request, paths sessionPaths, stdin io.WriteCloser, stdout io.Reader, transcript io.Writer, cost *costMeter) (*streamEnd, *RateLimit, error) {
+	var skillRoots []string
+	if paths.skillRoots != nil {
+		skillRoots = *paths.skillRoots
+	}
 	turn := codexRPCTurn{
 		Cwd:          req.workDir(),
 		Model:        req.Profile.Model,
@@ -526,6 +584,7 @@ func (codexBackend) consumeStdin(r *Runner, req Request, paths sessionPaths, std
 		Prompt:       req.Prompt,
 		Restricted:   paths.restricted,
 		ResumeID:     req.ResumeID,
+		SkillRoots:   skillRoots,
 	}
 	if !paths.restricted && paths.turn != nil && paths.turn.Tools != nil {
 		turn.Tools = paths.turn.Tools

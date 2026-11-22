@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+A Codex turn whose `Profile.Skills` is non-empty receives those skills.
+`Runner.Skills` prepares them, and the session's `codex app-server` gets one
+`skills/extraRoots/set` request, with the absolute `skills` directory of each
+prepared plugin as `extraRoots`, after `initialize` and the `initialized`
+notification and before `thread/start` or `thread/resume`. This holds for
+ordinary, `ToolsAll`, held, restricted and resumed turns. The turn fails
+before any thread starts, with an error that names skills, when the runner has
+no `SkillPreparer`, preparation fails, a prepared plugin has no `skills`
+directory, the server answers the request with an error (a Codex without
+`skills/extraRoots/set` answers "method not found") or the server ends before
+answering. A profile without skills prepares nothing and sends no request.
+Claude receives its prepared skills as `--plugin-dir`; opencode and pi receive
+none.
+
+`Runner.RunRestricted` accepts `Profile.Skills` on a Codex primary or fallback
+profile and keeps `Runner.Skills` and `Runner.SkillMountDirs` for such a turn.
+Skills on a claude, opencode or pi profile are rejected, and every other
+restriction applies to a Codex turn with skills as to any other.
+`agenttest.CodexAppServerScript` has `SkillsResult` and `SkillsError` to
+script the answer to `skills/extraRoots/set`, and
+`ExitBefore: "skills/extraRoots/set"` to end the fake before it answers.
+
 `CompleterOptions.IdleTimeout`, when above zero, removes a `Completer`'s kept
 sandbox once no call has taken it for that long; the next call creates a
 fresh one. Sandboxes are VMs that hold memory while kept, so a caller with

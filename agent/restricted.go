@@ -47,8 +47,14 @@ type RestrictedResult struct {
 // RunRestricted runs a read-only agent turn through the same backend and
 // process lifecycle as Run. It is intended for reviews and other analysis
 // that needs no caller-owned tools: the turn receives no caller's or
-// inherited MCP server, writable mount, VCS access, skills, hooks or local
-// project configuration. A backend whose descriptor declares
+// inherited MCP server, writable mount, VCS access, hooks or local project
+// configuration, and receives skills only on a codex profile: a codex skill
+// root adds instruction text, where a Claude plugin directory can carry
+// hooks and MCP servers, so Profile.Skills on a claude, opencode or pi
+// profile, primary or fallback, is rejected. A codex profile's skills are
+// prepared through Runner.Skills and registered with the app-server before
+// the thread starts, as in Run, and the turn fails if they cannot be;
+// Runner.SkillMountDirs stays with the runner for such a turn. A backend whose descriptor declares
 // RestrictedCapabilities.ReadServer is given the runner's own read-only
 // server over its workspace instead, and nothing else. A backend
 // descriptor must explicitly declare that it implements the restriction;
@@ -65,8 +71,10 @@ func (r *Runner) RunRestricted(ctx context.Context, req Request) (*RestrictedRes
 	runner := *r
 	runner.AddDirs = nil
 	runner.MountDirs = nil
-	runner.SkillMountDirs = nil
-	runner.Skills = nil
+	if !restrictedNamesSkills(req.Profile) {
+		runner.SkillMountDirs = nil
+		runner.Skills = nil
+	}
 	if runner.SessionsDir == "" {
 		runner.SessionsDir = os.TempDir()
 	}
@@ -96,6 +104,18 @@ func (r *Runner) RunRestricted(ctx context.Context, req Request) (*RestrictedRes
 		}
 		profile = *profile.Fallback
 	}
+}
+
+// restrictedNamesSkills reports whether the profile or a fallback names
+// skills. validateRestrictedRequest has already refused them on every
+// profile but a codex one.
+func restrictedNamesSkills(p Profile) bool {
+	for q := &p; q != nil; q = q.Fallback {
+		if len(q.Skills) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func restrictedDefaults(p Profile) Profile {
@@ -191,7 +211,10 @@ func validateRestrictedRequest(req Request) error {
 		if p.Sandbox != "" || p.Confine || p.SandboxImage != "" || p.ContainerUseEnvironment != "" || p.Dagger != nil || len(p.SandboxDomains) > 0 {
 			return errors.New("restricted session: caller-selected sandboxes are not supported; RunRestricted establishes the boundary")
 		}
-		if p.VCSAccess || p.Shell != "" || len(p.MCP) > 0 || len(p.AllowedTools) > 0 || len(p.DisallowedTools) > 0 || len(p.Skills) > 0 || len(p.PiPackages) > 0 {
+		if p.VCSAccess || p.Shell != "" || len(p.MCP) > 0 || len(p.AllowedTools) > 0 || len(p.DisallowedTools) > 0 || len(p.PiPackages) > 0 {
+			return errors.New("restricted session: VCS, shell, MCP, tool, skill and package configuration cannot be supplied")
+		}
+		if len(p.Skills) > 0 && provider != AgentCodex {
 			return errors.New("restricted session: VCS, shell, MCP, tool, skill and package configuration cannot be supplied")
 		}
 	}

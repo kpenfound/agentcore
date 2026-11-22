@@ -72,7 +72,8 @@ type CodexAppServerPause struct {
 // as CodexAppServer hands it to the fake: see that function.
 type CodexAppServerScript struct {
 	// ExitBefore names the step the fake exits at without answering: one
-	// of "initialize", "config/read", "thread/start", "thread/resume" or
+	// of "initialize", "skills/extraRoots/set", "config/read",
+	// "thread/start", "thread/resume" or
 	// "turn/start" (whichever of thread/start and thread/resume the
 	// client actually sends). Left empty, the fake answers every step it
 	// reaches.
@@ -81,6 +82,12 @@ type CodexAppServerScript struct {
 	// InitializeResult is initialize's answer. Left nil, it answers with
 	// an empty result.
 	InitializeResult any `json:"initializeResult,omitempty"`
+
+	// SkillsResult and SkillsError script skills/extraRoots/set's answer;
+	// at most one should be set. Neither set answers with an empty result.
+	// The request's params are recorded with every other line.
+	SkillsResult any            `json:"skillsResult,omitempty"`
+	SkillsError  *CodexRPCError `json:"skillsError,omitempty"`
 
 	// ConfigResult and ConfigError script config/read's answer; at most
 	// one should be set. Neither set answers with an empty result.
@@ -397,9 +404,10 @@ func RunCodexAppServer() int {
 	}
 	respond(msg.ID, script.InitializeResult, nil)
 
-	// config/read is optional: only a held turn sends it. Read messages
-	// until thread/start or thread/resume arrives, answering config/read
-	// along the way when the client sent one.
+	// skills/extraRoots/set and config/read are optional: only a turn
+	// naming skills sends the first, only a held turn the second. Read
+	// messages until thread/start or thread/resume arrives, answering
+	// either along the way when the client sent one.
 	var threadMethod string
 	for {
 		msg, ok = readLine()
@@ -410,6 +418,11 @@ func RunCodexAppServer() int {
 			continue
 		}
 		switch msg.Method {
+		case "skills/extraRoots/set":
+			if script.ExitBefore == "skills/extraRoots/set" {
+				return 0
+			}
+			respond(msg.ID, script.SkillsResult, script.SkillsError)
 		case "config/read":
 			if script.ExitBefore == "config/read" {
 				return 0

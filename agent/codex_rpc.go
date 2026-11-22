@@ -41,7 +41,17 @@ type codexRPCTurn struct {
 	// against codexHeldSettings(Tools) and ends the session as an error,
 	// before any thread/start, when it fails.
 	ConfigDir string
+	// SkillRoots, when non-empty, are the absolute skills directories the
+	// turn's profile names. codexRPCRun registers them with one
+	// skills/extraRoots/set request right after the initialized
+	// notification, ahead of config/read and of the thread request, and
+	// ends the session as an error, before any thread starts, when the
+	// server answers it with an error or ends first. Empty sends nothing.
+	SkillRoots []string
 }
+
+// codexSkillsMethod replaces the app-server process's extra skill roots.
+const codexSkillsMethod = "skills/extraRoots/set"
 
 // codexRPCOutcome is what one codex app-server conversation produced, in
 // streamEnd's terms (Diagnostics included, and alone when the conversation
@@ -581,7 +591,11 @@ func (c *codexConversation) recordTurnCompleted(params json.RawMessage) error {
 }
 
 // codexRPCRun drives one codex app-server conversation to its end:
-// initialize, the initialized notification, an optional config/read whose
+// initialize, the initialized notification, skills/extraRoots/set when the
+// turn's profile names skills (the absolute skills directory of each
+// prepared skill, registered on this process alone, with an error answer or
+// a server that ends first failing the session before any thread starts),
+// an optional config/read whose
 // answer is checked against the held settings a held turn was given,
 // thread/start or thread/resume, turn/start, then notifications read and
 // answered until turn/completed, after which stdin is closed so the
@@ -609,6 +623,12 @@ func (c *codexConversation) run(turn codexRPCTurn, stop <-chan struct{}) (*codex
 	}
 	if err := c.notify("initialized", nil); err != nil {
 		return nil, codexAppServerEnded("initialized")
+	}
+
+	if len(turn.SkillRoots) > 0 {
+		if _, err := c.call(codexSkillsMethod, map[string]any{"extraRoots": turn.SkillRoots}); err != nil {
+			return nil, fmt.Errorf("register skills: %w", err)
+		}
 	}
 
 	var config json.RawMessage
