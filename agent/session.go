@@ -347,7 +347,7 @@ func (r *Runner) runTurn(ctx context.Context, req Request, kind turnKind) (*Resu
 		return nil, err
 	}
 
-	paths := sessionPaths{dir: sessionDir, systemPrompt: systemPromptPath, prompt: promptPath, restricted: restricted, completion: kind.completion}
+	paths := sessionPaths{dir: sessionDir, systemPrompt: systemPromptPath, prompt: promptPath, restricted: restricted, completion: kind.completion, skillRoots: new([]string)}
 	paths.mcp = maps.Clone(req.Profile.MCP)
 	var box box
 	startupBegan := time.Now()
