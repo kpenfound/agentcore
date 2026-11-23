@@ -64,9 +64,28 @@ type RestrictedResult struct {
 // Fallback, Effort, MaxTurns, Timeout and Env), Workspace, Prompt, Env,
 // ResumeID and CostCapUSD, which holds each attempt to the cap. Other fields describe capabilities a restricted turn cannot have
 // and are rejected rather than ignored.
+//
+// CallerMCP names the one MCP server the turn may use, which the caller
+// serves over streamable HTTP. Before any process starts, RunRestricted
+// connects to it and lists its tools (checkCallerMCP) and refuses the request
+// unless every tool is declared read-only; the names listed are the turn's
+// allowed tools of that server for every attempt, fallbacks included. A
+// profile or fallback on a backend whose descriptor does not declare
+// RestrictedCapabilities.CallerMCP is refused up front. agentcore checks the
+// declarations; the caller answers for the tools actually being read-only.
 func (r *Runner) RunRestricted(ctx context.Context, req Request) (*RestrictedResult, error) {
 	if err := validateRestrictedRequest(req); err != nil {
 		return nil, err
+	}
+	if req.CallerMCP != nil {
+		// The check runs once, before any agent starts, and its answer is
+		// the turn's list: every attempt below is held to it.
+		server := *req.CallerMCP
+		tools, err := checkCallerMCP(ctx, server)
+		if err != nil {
+			return nil, err
+		}
+		req.CallerMCP, req.callerTools = &server, tools
 	}
 	runner := *r
 	runner.AddDirs = nil
@@ -194,6 +213,11 @@ func validateRestrictedRequest(req Request) error {
 	case req.SessionDir != "":
 		return errors.New("restricted session: SessionDir is owned by RunRestricted")
 	}
+	if req.CallerMCP != nil {
+		if err := validateCallerMCP(req.CallerMCP); err != nil {
+			return err
+		}
+	}
 	seen := map[*Profile]bool{}
 	for p := &req.Profile; p != nil; p = p.Fallback {
 		if seen[p] {
@@ -207,6 +231,9 @@ func validateRestrictedRequest(req Request) error {
 		}
 		if backend.Restricted == nil || !backend.Restricted.Supported {
 			return fmt.Errorf("restricted session: agent %q cannot establish the read-only restriction", provider)
+		}
+		if req.CallerMCP != nil && !backend.Restricted.CallerMCP {
+			return fmt.Errorf("restricted session: agent %q cannot carry a caller MCP server", provider)
 		}
 		if p.Sandbox != "" || p.Confine || p.SandboxImage != "" || p.ContainerUseEnvironment != "" || p.Dagger != nil || len(p.SandboxDomains) > 0 {
 			return errors.New("restricted session: caller-selected sandboxes are not supported; RunRestricted establishes the boundary")

@@ -78,6 +78,11 @@ type RestrictedCapabilities struct {
 	// given the runner's read server (readserver.go) to read the
 	// workspace with instead.
 	ReadServer bool
+	// CallerMCP says the backend can carry one caller-served MCP server
+	// (Request.CallerMCP) and hold the turn to the tools listed at the
+	// pre-launch check. A restricted request that sets the field is refused
+	// before anything starts when its profile or any fallback lacks it.
+	CallerMCP bool
 }
 
 // A Placement is where a turn runs: its sandbox (one of Sandboxes, never
@@ -211,7 +216,7 @@ var Backends = []Backend{
 			"VERTEX_*", "DISABLE_*", "MAX_THINKING_TOKENS", "MCP_*",
 		},
 		ArgvMarker: true,
-		Restricted: &RestrictedCapabilities{Supported: true, FollowUp: true},
+		Restricted: &RestrictedCapabilities{Supported: true, FollowUp: true, CallerMCP: true},
 		// --tools holds every placement.
 		WritableTools: supportEverywhere(),
 		bin:           func(r *Runner) string { return r.ClaudeBin },
@@ -222,7 +227,7 @@ var Backends = []Backend{
 		Credentials:   []string{"OPENAI_API_KEY", "CODEX_API_KEY"},
 		ProviderEnv:   []string{"OPENAI_*", "CODEX_*"},
 		ArgvMarker:    true,
-		Restricted:    &RestrictedCapabilities{Supported: true, FollowUp: true, ReadServer: true},
+		Restricted:    &RestrictedCapabilities{Supported: true, FollowUp: true, ReadServer: true, CallerMCP: true},
 		WritableTools: codexWritableTools(),
 		bin:           func(r *Runner) string { return r.CodexBin },
 		impl:          codexBackend{},
