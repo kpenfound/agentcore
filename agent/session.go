@@ -86,6 +86,15 @@ type Request struct {
 	// (thread/tokenUsage/updated) but never prices them, so this cap stays
 	// inert and no codex session is ever stopped by it.
 	CostCapUSD float64
+	// CallerMCP is the one MCP server a restricted turn may use, which the
+	// caller serves over streamable HTTP. Only RunRestricted accepts it, on
+	// claude and codex profiles (RestrictedCapabilities.CallerMCP): Run
+	// refuses a request that sets it. See CallerMCPServer.
+	CallerMCP *CallerMCPServer
+	// callerTools are the tool names RunRestricted's check listed on the
+	// CallerMCP server: the only ones of it the turn may call, for every
+	// attempt of the turn.
+	callerTools []string
 }
 
 // Result is what a finished session produced.
@@ -295,6 +304,9 @@ func (r *Runner) runTurn(ctx context.Context, req Request, kind turnKind) (*Resu
 	r = &runner // per-run defaults must not mutate a shared runner
 	if r.Logger == nil {
 		r.Logger = slog.Default()
+	}
+	if err := checkCallerMCPTurn(req, restricted); err != nil {
+		return nil, err
 	}
 	// A tool grant the backend cannot hold the turn to is refused first,
 	// with the remedy, ahead of the profile's own consistency: opencode in

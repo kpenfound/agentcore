@@ -77,8 +77,9 @@ analysis turn. It accepts the same `Request` and uses the same backend command
 builders, stream parsers, timeout and process-group lifecycle as `Run`, but it
 owns the capability contract instead of accepting caller grants. The request
 may carry only a workspace, prompt, resume id, environment, cost cap and the
-profile's agent/model/effort/turn/timeout/fallback settings, and
-`Profile.Skills` on a Codex profile (primary or fallback). It receives no MCP
+profile's agent/model/effort/turn/timeout/fallback settings,
+`Profile.Skills` on a Codex profile (primary or fallback), and one
+caller-served MCP server, `Request.CallerMCP` (below). It receives no other MCP
 server, outcome contract, writable mount, VCS access, plugin or hook, and no
 skill except those Codex skills: a Codex skill root adds instruction text, not
 tools, MCP servers or hooks, where a Claude plugin directory can carry hooks
@@ -105,6 +106,73 @@ and whether it supports follow-up; Codex resumes its thread through
 attempt and clearing a resume id before crossing to another backend. The
 returned `RestrictedResult.Agent`, `RestrictedResult.Model` and
 `RestrictedResult.ClaudeID` belong to the backend that answered.
+
+#### A caller's read-only MCP server
+
+`Request.CallerMCP` hands a restricted turn one MCP server that the caller
+already serves over streamable HTTP, such as an `mcphost` lease's endpoint:
+
+```go
+endpoint, lease, err := mcphost.Start(ctx, srv) // srv's tools declare readOnlyHint: true
+if err != nil {
+	return err
+}
+defer lease.Close() // the lease stays the caller's
+res, err := runner.RunRestricted(ctx, agent.Request{
+	Name:      "lookup-turn",
+	Profile:   agent.Profile{Name: "lookup", Agent: agent.AgentClaude},
+	Workspace: vcs.Directory(dir),
+	Prompt:    prompt,
+	CallerMCP: &agent.CallerMCPServer{Name: "lookup", URL: endpoint.URL, BearerToken: endpoint.Token},
+})
+```
+
+- **Fields.** `Name` is the server name the agent reaches it by, `URL` its
+  http or https endpoint (no credentials in the URL) and `BearerToken` the
+  token it requires. agentcore starts no process for the server and never
+  stops or closes it.
+- **Name rules.** `Name` matches `^[A-Za-z][A-Za-z0-9_]{0,31}$`, which is valid as
+  a Claude server name (`mcp__<server>__<tool>`) and as a Codex `mcp_servers`
+  key, and is not `restricted_read` in any letter case, the name of the
+  runner's own read server. A request with any other name, or a URL that is not
+  an http(s) URL with a host, is refused before any network call or agent
+  process.
+- **The check.** Before any agent process starts, `RunRestricted` connects to
+  the server with the token, initializes it and lists its tools, once per
+  request however many fallback attempts follow. The check ends within
+  `agent.CallerMCPCheckTimeout` (20 seconds) and when the caller's context
+  ends, and its client session is closed whether it passes, fails, times out or
+  is cancelled. The request is refused, and no agent starts, when the server
+  cannot be reached or does not answer within the limit, when it lists no
+  tools, when a tool name does not match `^[A-Za-z0-9_-]{1,64}$`, or when any
+  tool does not carry the annotation `readOnlyHint: true`. A missing annotation
+  and `readOnlyHint: false` both count as not read-only. The error names every
+  such tool.
+- **The locked list.** The tool names the check lists are the only tools of the
+  server the turn may call, for the whole turn and for every `Profile.Fallback`
+  attempt. The runner does not list the server again: a tool the server adds or
+  renames after the check cannot be called in that turn.
+- **Backends.** Claude and Codex carry the server
+  (`RestrictedCapabilities.CallerMCP` in the backend descriptor). Claude adds
+  the server to its strict MCP configuration, which holds nothing else, and
+  `mcp__<name>__<tool>` for each locked tool to its allowed tools beside the
+  read-only built-ins. Codex adds the server beside `restricted_read` with
+  `enabled_tools` set to the locked tools and its tools approved, and every
+  inherited server stays disabled; an inherited server with the caller's name
+  is replaced. The sandbox, disabled features and tool floor are those of a turn
+  without the field. A request whose profile or any fallback runs on OpenCode or
+  Pi is refused before any process starts.
+- **Token.** The token reaches the agent only through its environment, as
+  `CALLER_MCP_TOKEN`; the Claude configuration file and the Codex command line
+  hold a reference to that variable, never the value.
+- **`Run`.** Ordinary `Run` (and `Complete`) refuses a request that sets
+  `CallerMCP`, so the field is never ignored.
+- **Declared, not proven.** agentcore checks what the caller declares: it reads
+  the annotations the server lists and cannot tell whether a tool really only
+  reads. The caller answers for every tool on the server being read-only, and
+  for closing its lease or listener when the turn ends. `HostMCP` and
+  `Profile.MCP` are still refused, and a request with `CallerMCP` nil is held to
+  the floor as before.
 
 MCP entries contain public context in `Env` and credential names in `EnvVars`.
 Pass credential values in the request environment. `MCPEntries` can expand

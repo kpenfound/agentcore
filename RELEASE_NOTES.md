@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+`Request.CallerMCP`, a `*CallerMCPServer{Name, URL, BearerToken}`, gives a
+`Runner.RunRestricted` turn one MCP server the caller already serves over
+streamable HTTP, for example an `mcphost` lease's endpoint. Before any agent
+process starts, `RunRestricted` connects with the token and lists the server's
+tools, once per request, within `CallerMCPCheckTimeout` (20 seconds) and the
+caller's context, and closes the check's session on every path. It refuses the
+request, naming the tools, when a tool lacks `readOnlyHint: true`, and when the
+server is unreachable, silent or lists no tools. The listed names are the
+turn's allowed tools for the server, for every fallback attempt too. `Name`
+must match `^[A-Za-z][A-Za-z0-9_]{0,31}$` and differ from `restricted_read`;
+a bad name or URL is refused before any network call. Claude holds the server
+in its strict MCP configuration and allows `mcp__<name>__<tool>` for the locked
+tools; Codex enables the server beside `restricted_read` with only the locked
+tools. The token travels in `CALLER_MCP_TOKEN`, never on a command line.
+`RestrictedCapabilities.CallerMCP` declares which backends carry the server:
+Claude and Codex do, and a request whose profile or fallback chain reaches
+OpenCode or Pi is refused before anything starts. `Run` and `Complete` refuse
+the field. agentcore checks the declarations; the caller answers for the tools
+actually being read-only. A request with `CallerMCP` nil is unchanged.
+
 A Codex turn whose `Profile.Skills` is non-empty receives those skills.
 `Runner.Skills` prepares them, and the session's `codex app-server` gets one
 `skills/extraRoots/set` request, with the absolute `skills` directory of each

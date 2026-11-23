@@ -158,11 +158,26 @@ func (claudeBackend) command(ctx context.Context, r *Runner, b Backend, req Requ
 		"--output-format", "stream-json",
 		"--verbose",
 	}
+	var extra []envVar
+	mcpServers := paths.mcp
 	if paths.restricted {
+		allowed := slices.Clone(restrictedReadTools)
+		if s := req.CallerMCP; s != nil {
+			// The locked tools of the caller's server, and nothing else of
+			// it, join the read-only built-ins; the strict configuration
+			// below holds that one server.
+			allowed = append(allowed, callerMCPAllowedTools(s.Name, req.callerTools)...)
+			mcpServers = maps.Clone(mcpServers)
+			if mcpServers == nil {
+				mcpServers = map[string]MCPEntry{}
+			}
+			mcpServers[s.Name] = callerMCPEntry(s)
+			extra = callerMCPEnv(s)
+		}
 		args = append(args,
 			"--permission-prompts", "none",
 			"--setting-sources", "",
-			"--allowedTools", strings.Join(restrictedReadTools, ","),
+			"--allowedTools", strings.Join(allowed, ","),
 			"--disallowedTools", strings.Join(restrictedDeniedTools, ","),
 		)
 	} else if boxed {
@@ -228,7 +243,7 @@ func (claudeBackend) command(ctx context.Context, r *Runner, b Backend, req Requ
 	// Write the caller's complete server set, including an empty set, so
 	// local MCP configuration does not add unexpected servers.
 	mcpPath := filepath.Join(paths.dir, "mcp.json")
-	if err := WriteMCPConfig(mcpPath, paths.mcp); err != nil {
+	if err := WriteMCPConfig(mcpPath, mcpServers); err != nil {
 		return "", nil, "", nil, err
 	}
 	args = append(args, "--mcp-config", mcpPath, "--strict-mcp-config")
@@ -237,7 +252,7 @@ func (claudeBackend) command(ctx context.Context, r *Runner, b Backend, req Requ
 		if paths.turn != nil {
 			denied = paths.turn.DeniedExecutables
 		}
-		settings, err := claudeSandboxSettings(sortedKeys(paths.mcp), runtime.GOOS, req.Profile.SandboxDomains, denied)
+		settings, err := claudeSandboxSettings(sortedKeys(mcpServers), runtime.GOOS, req.Profile.SandboxDomains, denied)
 		if err != nil {
 			return "", nil, "", nil, err
 		}
@@ -258,7 +273,7 @@ func (claudeBackend) command(ctx context.Context, r *Runner, b Backend, req Requ
 			args = append(args, "--plugin-dir", d)
 		}
 	}
-	return bin, args, req.Prompt, nil, nil
+	return bin, args, req.Prompt, extra, nil
 }
 
 // streamResult is the final "result" event of claude's stream-json output.
@@ -539,12 +554,21 @@ func codexAppServerCommand(ctx context.Context, r *Runner, b Backend, req Reques
 			if paths.read != nil && name == ReadServerName {
 				continue
 			}
+			if req.CallerMCP != nil && name == req.CallerMCP.Name {
+				// An inherited server of the caller's server's name is
+				// replaced by it, as one named like the read server is.
+				continue
+			}
 			entries = append(entries, codexValue(name)+"={enabled=false}")
 		}
 		if paths.read != nil {
 			entries = append(entries, codexValue(ReadServerName)+"={url="+codexValue(paths.read.url)+
 				",bearer_token_env_var="+codexValue(readServerTokenEnv)+"}")
 			extra = append(extra, envVar{readServerTokenEnv, paths.read.token})
+		}
+		if s := req.CallerMCP; s != nil {
+			entries = append(entries, codexCallerMCPEntry(s, req.callerTools))
+			extra = append(extra, callerMCPEnv(s)...)
 		}
 		if len(entries) > 0 {
 			args = append(args, "-c", "mcp_servers={"+strings.Join(entries, ",")+"}")
